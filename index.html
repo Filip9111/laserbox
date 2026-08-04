@@ -1,9 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="nl">
 <head>
-    <title>Laserbox</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laserbox 01</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <!-- MQTT.js -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
-<body style="background:#202020;color:white;text-align:center;font-family:Arial">
-<h1>Laserbox is online!</h1>
+
+<body>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>Laserbox 01</h1>
+
+        <div id="connection" class="offline">
+            ● OFFLINE
+        </div>
+
+        <div id="status">
+            Wachten op verbinding...
+        </div>
+
+    </div>
+
+
+    <div class="card">
+
+        <h2>Automatische sequenties</h2>
+
+        <div class="grid2">
+
+            <button id="btnAll">ALL SEQUENCE</button>
+
+            <button id="btnStop" class="red">STOP</button>
+
+            <button id="btn14">LASER 1-4</button>
+
+            <button id="btn58">LASER 5-8</button>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="card">
+
+        <h2>Handmatige bediening</h2>
+
+        <div class="laserGrid">
+
+            <button id="l1">Laser 1</button>
+            <button id="l2">Laser 2</button>
+
+            <button id="l3">Laser 3</button>
+            <button id="l4">Laser 4</button>
+
+            <button id="l5">Laser 5</button>
+            <button id="l6">Laser 6</button>
+
+            <button id="l7">Laser 7</button>
+            <button id="l8">Laser 8</button>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="card">
+
+        <h2>MQTT Log</h2>
+
+        <textarea id="log" readonly></textarea>
+
+    </div>
+
+</div>
+
+<script src="app.js"></script>
+
 </body>
 </html>

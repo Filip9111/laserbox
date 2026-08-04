@@ -72,8 +72,9 @@ button{
     border-radius:12px;
     font-size:18px;
     cursor:pointer;
-    background:#4b4b4b;
-    color:white;
+    background:#8fd694;
+    color:#111;
+    font-weight:600;
     transition:.2s;
 }
 
@@ -83,22 +84,6 @@ button:hover{
 
 button:active{
     transform:scale(.98);
-}
-
-.red{
-    background:#d52b2b;
-}
-
-.green{
-    background:#00aa44;
-}
-
-.orange{
-    background:#ff9800;
-}
-
-.blue{
-    background:#1976d2;
 }
 
 #log{
@@ -130,14 +115,14 @@ button{
 }
 
 }
-/* Toevoegen aan het einde van style.css */
 
-@keyframes blinkRed {
-    0%, 100% { color: white; }
-    50% { color: #ff2020; }
+/* Knipperende rode achtergrond voor geactiveerde lasers */
+@keyframes blinkRedBg {
+    0%, 100% { background-color:#8fd694; color:#111; }
+    50% { background-color:#ff2020; color:#fff; }
 }
 
-.laser-on {
-    animation: blinkRed 0.7s infinite;
-    font-weight: bold;
+.laser-on{
+    animation: blinkRedBg 0.7s infinite;
+    font-weight:bold;
 }

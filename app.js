@@ -75,7 +75,7 @@ client.on("message", (topic, payload) => {
 
     if (topic === STATUS_TOPIC) {
         statusEl.textContent = msg;
-        updateLaserButtonStates(msg);
+        handleStatusMessage(msg);
     }
 });
 
@@ -96,17 +96,41 @@ document.getElementById("btn14").addEventListener("click", () => sendCommand("SE
 document.getElementById("btn58").addEventListener("click", () => sendCommand("SEQ58"));
 
 // ==== HANDMATIGE LASERS (toggle, ESP32 beheert eigen aan/uit-status) ====
+const laserState = {}; // wordt bijgehouden op basis van de status-berichten van de ESP32
 for (let i = 1; i <= 8; i++) {
+    laserState[i] = false;
+
     const btn = document.getElementById("l" + i);
     btn.addEventListener("click", () => {
         sendCommand("L" + i);
+        // Geen directe class-toggle hier: we wachten op het statusbericht
+        // van de ESP32, zodat de knop ook correct blijft als de laser via
+        // een ander toestel (of de eigen webserver van de ESP32) bediend wordt.
     });
 }
 
-// Optioneel: knop groen kleuren op basis van het statusbericht "LASER X TOGGLE"
-// Dit is een best-effort weergave; de ESP32 stuurt geen expliciete ON/OFF-status per laser,
-// dus we kunnen de knopkleur niet 100% betrouwbaar synchroniseren zonder extra statusberichten.
-function updateLaserButtonStates(msg) {
-    // Placeholder: hier zou je op kunnen bouwen als de ESP32 later
-    // per laser een eigen status-topic/payload stuurt (bv. "LASER 3 ON").
+// ==== STATUSBERICHTEN VERWERKEN ====
+// De ESP32 stuurt bij elke toggle: "LASER X TOGGLE"
+// (X = laser 1..8), ongeacht via welk kanaal de toggle gebeurde.
+function handleStatusMessage(msg) {
+    const match = msg.match(/^LASER (\d) TOGGLE$/);
+    if (match) {
+        const i = parseInt(match[1], 10);
+        laserState[i] = !laserState[i];
+
+        const btn = document.getElementById("l" + i);
+        if (btn) {
+            btn.classList.toggle("laser-on", laserState[i]);
+        }
+    }
+
+    // Bij een globale STOP of nieuwe sequentie: alle knipperende knoppen resetten
+    if (msg === "STOP" || msg === "ALL SEQUENCE" ||
+        msg === "SEQUENCE LASER 1-4" || msg === "SEQUENCE LASER 5-8") {
+        for (let i = 1; i <= 8; i++) {
+            laserState[i] = false;
+            const btn = document.getElementById("l" + i);
+            if (btn) btn.classList.remove("laser-on");
+        }
+    }
 }

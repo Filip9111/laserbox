@@ -130,3 +130,14 @@ button{
 }
 
 }
+/* Toevoegen aan het einde van style.css */
+
+@keyframes blinkRed {
+    0%, 100% { color: white; }
+    50% { color: #ff2020; }
+}
+
+.laser-on {
+    animation: blinkRed 0.7s infinite;
+    font-weight: bold;
+}

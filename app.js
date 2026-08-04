@@ -1,7 +1,7 @@
 // ==== CONFIG ====
 const MQTT_HOST = "wss://97a1520a4bff46d79cbb84c9d0e5468c.s1.eu.hivemq.cloud:8884/mqtt";
 const MQTT_USER = "Lasertester";
-const MQTT_PASS = "VUL_HIER_JE_WACHTWOORD_IN"; // zelfde als mqtt_pass in de .ino
+const MQTT_PASS = "Swat@laser1!"; // zelfde als mqtt_pass in de .ino
 
 const BASE_TOPIC = "filip/laserbox01";
 const STATUS_TOPIC = BASE_TOPIC + "/status";

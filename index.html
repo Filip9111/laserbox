@@ -29,11 +29,23 @@
             box-shadow: 0 0 14px rgba(22, 135, 255, .8);
         }
 
+        @keyframes blinkSequenceButton {
+            0%, 100% {
+                background-color: #8fd694;
+                color: #111;
+                box-shadow: none;
+            }
+
+            50% {
+                background-color: #ff2020;
+                color: white;
+                box-shadow: 0 0 18px rgba(255, 32, 32, .9);
+            }
+        }
+
         .sequence-active {
-            background: #ff9800 !important;
-            color: #111 !important;
-            box-shadow: 0 0 18px rgba(255, 152, 0, .9);
-            outline: 3px solid #ffd180;
+            animation: blinkSequenceButton .7s infinite;
+            font-weight: bold;
         }
 
         @media (max-width: 600px) {
@@ -104,3 +116,4 @@
 <script src="app.js"></script>
 </body>
 </html>
+

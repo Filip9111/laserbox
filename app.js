@@ -1,33 +1,98 @@
-// ==== CONFIG ====
 const MQTT_HOST = "wss://97a1520a4bff46d79cbb84c9d0e5468c.s1.eu.hivemq.cloud:8884/mqtt";
 const MQTT_USER = "Lasertester";
-const MQTT_PASS = "Swat@laser1!"; // zelfde als mqtt_pass in de .ino
+const MQTT_PASS = "Swat@laser1!";
 
-const BASE_TOPIC = "filip/laserbox01";
-const STATUS_TOPIC = BASE_TOPIC + "/status";
-const SUB_ALL_TOPIC = BASE_TOPIC + "/#";
-const CMD_TOPIC = BASE_TOPIC + "/command"; // let op: "command", niet "cmd"
+const BOX_COUNT = 3;
 
-// ==== DOM ELEMENTEN ====
+const BROWSER_CLIENT_ID =
+    "LaserboxWeb-" + Math.random().toString(16).slice(2, 10);
+
+let selectedBox = 1;
+const boxState = {};
+
+for (let box = 1; box <= BOX_COUNT; box++) {
+    boxState[box] = {
+        status: "Wachten op status...",
+        activeSequence: null,
+        lasers: Array(8).fill(false)
+    };
+}
+
 const connectionEl = document.getElementById("connection");
 const statusEl = document.getElementById("status");
+const selectedBoxTitleEl = document.getElementById("selectedBoxTitle");
 const logEl = document.getElementById("log");
 
-// ==== LOG HELPER ====
-function log(msg) {
+const sequenceButtons = {
+    ALL: document.getElementById("btnAll"),
+    SEQ14: document.getElementById("btn14"),
+    SEQ58: document.getElementById("btn58")
+};
+
+function baseTopic(box) {
+    return `filip/laserbox${String(box).padStart(2, "0")}`;
+}
+
+function commandTopic(box) {
+    return `${baseTopic(box)}/command`;
+}
+
+function statusTopic(box) {
+    return `${baseTopic(box)}/status`;
+}
+
+function log(message) {
     const time = new Date().toLocaleTimeString();
-    logEl.value += `[${time}] ${msg}\n`;
+    logEl.value += `[${time}] ${message}\n`;
     logEl.scrollTop = logEl.scrollHeight;
 }
 
-// ==== VERBINDING ====
-function setConnected(isConnected) {
-    if (isConnected) {
-        connectionEl.textContent = "● ONLINE";
-        connectionEl.className = "online";
-    } else {
-        connectionEl.textContent = "● OFFLINE";
-        connectionEl.className = "offline";
+function setConnected(connected) {
+    connectionEl.textContent = connected ? "● ONLINE" : "● OFFLINE";
+    connectionEl.className = connected ? "online" : "offline";
+}
+
+function clearSequenceHighlights() {
+    Object.values(sequenceButtons).forEach((button) => {
+        button.classList.remove("sequence-active");
+    });
+}
+
+function resetLasers(box) {
+    boxState[box].lasers.fill(false);
+}
+
+function renderSelectedBox() {
+    const state = boxState[selectedBox];
+
+    selectedBoxTitleEl.textContent =
+        `Laserbox ${String(selectedBox).padStart(2, "0")}`;
+
+    statusEl.textContent = state.status;
+
+    for (let box = 1; box <= BOX_COUNT; box++) {
+        document
+            .getElementById(`box${box}`)
+            .classList.toggle("box-active", box === selectedBox);
+    }
+
+    clearSequenceHighlights();
+
+    if (
+        state.activeSequence &&
+        sequenceButtons[state.activeSequence]
+    ) {
+        sequenceButtons[state.activeSequence]
+            .classList.add("sequence-active");
+    }
+
+    for (let laser = 1; laser <= 8; laser++) {
+        document
+            .getElementById(`l${laser}`)
+            .classList.toggle(
+                "laser-on",
+                state.lasers[laser - 1]
+            );
     }
 }
 
@@ -37,100 +102,200 @@ log("Verbinden met HiveMQ...");
 const client = mqtt.connect(MQTT_HOST, {
     username: MQTT_USER,
     password: MQTT_PASS,
-    reconnectPeriod: 3000,   // automatische reconnect elke 3s
-    connectTimeout: 8000,
-    clean: true
+    clientId: BROWSER_CLIENT_ID,
+    reconnectPeriod: 3000,
+    connectTimeout: 10000,
+    clean: true,
+    keepalive: 30
 });
 
-// ==== EVENTS ====
 client.on("connect", () => {
     setConnected(true);
-    log("Verbonden met HiveMQ ✅");
+    log("Verbonden met HiveMQ");
 
-    client.subscribe(SUB_ALL_TOPIC, (err) => {
-        if (err) {
-            log("Fout bij abonneren: " + err.message);
-        } else {
-            log("Geabonneerd op " + SUB_ALL_TOPIC);
-        }
-    });
+    for (let box = 1; box <= BOX_COUNT; box++) {
+        const topic = statusTopic(box);
+
+        client.subscribe(topic, { qos: 1 }, (error) => {
+            if (error) {
+                log(`Abonneerfout ${topic}: ${error.message}`);
+            } else {
+                log(`Geabonneerd op ${topic}`);
+            }
+        });
+    }
 });
 
 client.on("reconnect", () => {
-    log("Opnieuw verbinden...");
+    log("Opnieuw verbinden met HiveMQ...");
 });
 
 client.on("close", () => {
     setConnected(false);
-    log("Verbinding verbroken ❌");
+    log("MQTT-verbinding verbroken");
 });
 
-client.on("error", (err) => {
-    log("MQTT fout: " + err.message);
+client.on("offline", () => {
+    setConnected(false);
+});
+
+client.on("error", (error) => {
+    log(`MQTT-fout: ${error.message}`);
 });
 
 client.on("message", (topic, payload) => {
-    const msg = payload.toString();
-    log(`${topic} → ${msg}`);
+    const message = payload.toString().trim();
 
-    if (topic === STATUS_TOPIC) {
-        statusEl.textContent = msg;
-        handleStatusMessage(msg);
-    }
-});
+    const match = topic.match(
+        /^filip\/laserbox(0[1-3])\/status$/
+    );
 
-// ==== COMMANDO'S VERSTUREN ====
-function sendCommand(cmd) {
-    if (!client.connected) {
-        log("Kan niet versturen: niet verbonden.");
+    log(`${topic} → ${message}`);
+
+    if (!match) {
         return;
     }
-    client.publish(CMD_TOPIC, cmd);
-    log(`Verzonden → ${CMD_TOPIC}: ${cmd}`);
+
+    const box = Number(match[1]);
+
+    handleStatusMessage(box, message);
+});
+
+function handleStatusMessage(box, message) {
+    const state = boxState[box];
+
+    state.status = message;
+
+    if (message === "ALL SEQUENCE") {
+        state.activeSequence = "ALL";
+        resetLasers(box);
+
+    } else if (message === "SEQUENCE LASER 1-4") {
+        state.activeSequence = "SEQ14";
+        resetLasers(box);
+
+    } else if (message === "SEQUENCE LASER 5-8") {
+        state.activeSequence = "SEQ58";
+        resetLasers(box);
+
+    } else if (
+        message === "STOP" ||
+        message === "AUTO SHUTDOWN - 2 HOURS"
+    ) {
+        state.activeSequence = null;
+        resetLasers(box);
+
+    } else {
+        const laserMatch =
+            message.match(/^LASER ([1-8]) TOGGLE$/);
+
+        if (laserMatch) {
+            const laserIndex =
+                Number(laserMatch[1]) - 1;
+
+            state.lasers[laserIndex] =
+                !state.lasers[laserIndex];
+        }
+    }
+
+    if (box === selectedBox) {
+        renderSelectedBox();
+    }
 }
 
-// ==== VASTE KNOPPEN (sequenties) ====
-document.getElementById("btnAll").addEventListener("click", () => sendCommand("ALL"));
-document.getElementById("btnStop").addEventListener("click", () => sendCommand("STOP"));
-document.getElementById("btn14").addEventListener("click", () => sendCommand("SEQ14"));
-document.getElementById("btn58").addEventListener("click", () => sendCommand("SEQ58"));
+function sendCommand(command) {
+    if (!client.connected) {
+        log("Niet verzonden: geen verbinding met HiveMQ");
+        return false;
+    }
 
-// ==== HANDMATIGE LASERS (toggle, ESP32 beheert eigen aan/uit-status) ====
-const laserState = {}; // wordt bijgehouden op basis van de status-berichten van de ESP32
-for (let i = 1; i <= 8; i++) {
-    laserState[i] = false;
+    const boxAtSendTime = selectedBox;
+    const topic = commandTopic(boxAtSendTime);
 
-    const btn = document.getElementById("l" + i);
-    btn.addEventListener("click", () => {
-        sendCommand("L" + i);
-        // Geen directe class-toggle hier: we wachten op het statusbericht
-        // van de ESP32, zodat de knop ook correct blijft als de laser via
-        // een ander toestel (of de eigen webserver van de ESP32) bediend wordt.
+    client.publish(
+        topic,
+        command,
+        {
+            qos: 1,
+            retain: false
+        },
+        (error) => {
+            if (error) {
+                log(`Publicatiefout: ${error.message}`);
+            } else {
+                log(
+                    `Laserbox ${boxAtSendTime} verzonden → ${command}`
+                );
+            }
+        }
+    );
+
+    return true;
+}
+
+function startSequence(command) {
+    if (!sendCommand(command)) {
+        return;
+    }
+
+    boxState[selectedBox].activeSequence = command;
+    resetLasers(selectedBox);
+
+    renderSelectedBox();
+}
+
+function stopBox() {
+    if (!sendCommand("STOP")) {
+        return;
+    }
+
+    // STOP knippert bewust nooit.
+    boxState[selectedBox].activeSequence = null;
+    boxState[selectedBox].status = "STOP";
+
+    resetLasers(selectedBox);
+    renderSelectedBox();
+}
+
+for (let box = 1; box <= BOX_COUNT; box++) {
+    document
+        .getElementById(`box${box}`)
+        .addEventListener("click", () => {
+            selectedBox = box;
+            renderSelectedBox();
+
+            log(`Laserbox ${box} geselecteerd`);
+        });
+}
+
+document
+    .getElementById("btnAll")
+    .addEventListener("click", () => {
+        startSequence("ALL");
     });
+
+document
+    .getElementById("btnStop")
+    .addEventListener("click", stopBox);
+
+document
+    .getElementById("btn14")
+    .addEventListener("click", () => {
+        startSequence("SEQ14");
+    });
+
+document
+    .getElementById("btn58")
+    .addEventListener("click", () => {
+        startSequence("SEQ58");
+    });
+
+for (let laser = 1; laser <= 8; laser++) {
+    document
+        .getElementById(`l${laser}`)
+        .addEventListener("click", () => {
+            sendCommand(`L${laser}`);
+        });
 }
 
-// ==== STATUSBERICHTEN VERWERKEN ====
-// De ESP32 stuurt bij elke toggle: "LASER X TOGGLE"
-// (X = laser 1..8), ongeacht via welk kanaal de toggle gebeurde.
-function handleStatusMessage(msg) {
-    const match = msg.match(/^LASER (\d) TOGGLE$/);
-    if (match) {
-        const i = parseInt(match[1], 10);
-        laserState[i] = !laserState[i];
-
-        const btn = document.getElementById("l" + i);
-        if (btn) {
-            btn.classList.toggle("laser-on", laserState[i]);
-        }
-    }
-
-    // Bij een globale STOP of nieuwe sequentie: alle knipperende knoppen resetten
-    if (msg === "STOP" || msg === "ALL SEQUENCE" ||
-        msg === "SEQUENCE LASER 1-4" || msg === "SEQUENCE LASER 5-8") {
-        for (let i = 1; i <= 8; i++) {
-            laserState[i] = false;
-            const btn = document.getElementById("l" + i);
-            if (btn) btn.classList.remove("laser-on");
-        }
-    }
-}
+renderSelectedBox();

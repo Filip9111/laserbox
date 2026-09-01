@@ -9,6 +9,25 @@
 
     <!-- MQTT.js -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+@keyframes blinkSequence {
+    0%, 100% {
+        background-color: #8fd694;
+        color: #111;
+    }
+
+    50% {
+        background-color: #ff2020;
+        color: white;
+        box-shadow: 0 0 18px rgba(255, 32, 32, 0.9);
+    }
+}
+
+.sequence-active {
+    animation: blinkSequence 0.7s infinite !important;
+    font-weight: bold;
+}
+</style>
 </head>
 
 <body>

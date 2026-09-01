@@ -3,88 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laserbox 01</title>
+    <title>Laserbox bediening</title>
 
     <link rel="stylesheet" href="style.css">
 
-    <!-- MQTT.js -->
+    <style>
+        .box-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .box-button {
+            height: 40px;
+            background: #555;
+            color: white;
+            font-size: 15px;
+            border-radius: 9px;
+        }
+
+        .box-button.box-active {
+            background: #1687ff;
+            color: white;
+            box-shadow: 0 0 14px rgba(22, 135, 255, .8);
+        }
+
+        .sequence-active {
+            background: #ff9800 !important;
+            color: #111 !important;
+            box-shadow: 0 0 18px rgba(255, 152, 0, .9);
+            outline: 3px solid #ffd180;
+        }
+
+        @media (max-width: 600px) {
+            .box-selector {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .box-button {
+                height: 44px;
+                font-size: 14px;
+            }
+        }
+    </style>
+
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 
 <body>
-
 <div class="container">
 
     <div class="card">
+        <h1 id="selectedBoxTitle">Laserbox 01</h1>
 
-        <h1>Laserbox 01</h1>
+        <div id="connection" class="offline">● OFFLINE</div>
 
-        <div id="connection" class="offline">
-            ● OFFLINE
+        <div id="status">Wachten op status...</div>
+
+        <div class="box-selector">
+            <button id="box1" class="box-button box-active" type="button">BOX 1</button>
+            <button id="box2" class="box-button" type="button">BOX 2</button>
+            <button id="box3" class="box-button" type="button">BOX 3</button>
         </div>
-
-        <div id="status">
-            Wachten op verbinding...
-        </div>
-
     </div>
 
-
     <div class="card">
-
         <h2>Automatische sequenties</h2>
 
         <div class="grid2">
-
-            <button id="btnAll">ALL SEQUENCE</button>
-
-            <button id="btnStop" class="red">STOP</button>
-
-            <button id="btn14">LASER 1-4</button>
-
-            <button id="btn58">LASER 5-8</button>
-
+            <button id="btnAll" type="button">ALL SEQUENCE</button>
+            <button id="btnStop" class="red" type="button">STOP</button>
+            <button id="btn14" type="button">LASER 1-4</button>
+            <button id="btn58" type="button">LASER 5-8</button>
         </div>
-
     </div>
 
-
-
     <div class="card">
-
         <h2>Handmatige bediening</h2>
 
         <div class="laserGrid">
-
-            <button id="l1">Laser 1</button>
-            <button id="l2">Laser 2</button>
-
-            <button id="l3">Laser 3</button>
-            <button id="l4">Laser 4</button>
-
-            <button id="l5">Laser 5</button>
-            <button id="l6">Laser 6</button>
-
-            <button id="l7">Laser 7</button>
-            <button id="l8">Laser 8</button>
-
+            <button id="l1" type="button">Laser 1</button>
+            <button id="l2" type="button">Laser 2</button>
+            <button id="l3" type="button">Laser 3</button>
+            <button id="l4" type="button">Laser 4</button>
+            <button id="l5" type="button">Laser 5</button>
+            <button id="l6" type="button">Laser 6</button>
+            <button id="l7" type="button">Laser 7</button>
+            <button id="l8" type="button">Laser 8</button>
         </div>
-
     </div>
 
-
-
     <div class="card">
-
         <h2>MQTT Log</h2>
-
         <textarea id="log" readonly></textarea>
-
     </div>
 
 </div>
 
 <script src="app.js"></script>
-
 </body>
 </html>

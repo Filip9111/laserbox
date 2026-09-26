@@ -8,15 +8,15 @@ This project assumes a separate ESP32 DevKit (`esp32dev`) and a SIM7600-H carrie
 
 | ESP32 DevKit | SIM7600 carrier UART |
 | --- | --- |
-| GPIO16 (TX) | RXD |
-| GPIO17 (RX) | TXD |
+| GPIO17 (TX) | RXD |
+| GPIO16 (RX) | TXD |
 | GND | GND |
 
 Use the carrier board's specified power input and power-on procedure. Do not power the cellular modem from the ESP32 3.3 V pin. The modem needs a suitable supply for LTE transmit-current peaks. Confirm the carrier's UART voltage levels and pin labels before connecting; the photo identifies the SIM7600-H module but does not show its carrier pinout. Do not connect the raw module's PCIe edge contacts directly to ESP32 GPIO.
 
 Connect cellular and GNSS antennas to their matching connectors and insert an active SIM with a usable subscription. GNSS usually needs a clear view of the sky and can take several minutes to get its first fix.
 
-The modem RXD wire is connected to ESP32 GPIO16, and modem TXD to GPIO17. The UART pins and baud rate are set in `platformio.ini` as `MODEM_RX_PIN`, `MODEM_TX_PIN` and `MODEM_BAUD` (these name the ESP32-side pins). Change them to match your ESP32 and carrier wiring.
+The modem RXD wire is connected to ESP32 GPIO17, and modem TXD to GPIO16. The UART pins and baud rate are set in `platformio.ini` as `MODEM_RX_PIN`, `MODEM_TX_PIN` and `MODEM_BAUD` (these name the ESP32-side pins). Change them to match your ESP32 and carrier wiring.
 
 ## Run
 

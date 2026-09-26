@@ -859,7 +859,7 @@ void checkConnectionFallback() {
 
 void startCellular() {
   Serial.println("SIM7600 starten via 4G...");
-  Serial.printf("UART2 ESP TX=%d -> modem RX, ESP RX=%d <- modem TX\n",
+  Serial.printf("UART1 ESP TX=%d -> modem RX, ESP RX=%d <- modem TX\n",
                 MODEM_TX_PIN, MODEM_RX_PIN);
 
   PPP.setApn(CELLULAR_APN);
@@ -919,6 +919,8 @@ bool parseGpsCoordinate(const String& degreesMinutes, bool latitude,
 }
 
 void updateModemTelemetry() {
+  if (!modemStarted) return;
+
   unsigned long now = millis();
   if (now - lastTelemetryAttempt < MODEM_TELEMETRY_INTERVAL) return;
   lastTelemetryAttempt = now;
@@ -945,8 +947,6 @@ void updateModemTelemetry() {
              parseGpsCoordinate(lonText, false, ew, gpsLongitude);
   }
 
-  if (!mqttClient.connected()) return;
-
   String rssi = (modemRssi >= 0 && modemRssi <= 31)
                     ? String(modemRssi) : String("null");
   String signalDbm = (modemRssi >= 0 && modemRssi <= 31)
@@ -956,8 +956,20 @@ void updateModemTelemetry() {
   String payload = "{\"rssi\":" + rssi +
       ",\"signalDbm\":" + signalDbm +
       ",\"lat\":" + lat + ",\"lon\":" + lon + "}";
-  mqttClient.publish(mqtt_telemetry_topic, payload.c_str(), true);
-  Serial.printf("4G/GNSS update: %s\n", payload.c_str());
+
+  // Toon de modemmeting ook lokaal als MQTT nog niet verbonden is.
+  Serial.printf("4G/GNSS meting: %s\n", payload.c_str());
+
+  if (!mqttClient.connected()) {
+    Serial.println("Telemetrie niet gepubliceerd: MQTT niet verbonden");
+    return;
+  }
+
+  if (mqttClient.publish(mqtt_telemetry_topic, payload.c_str(), true)) {
+    Serial.printf("Telemetrie gepubliceerd op %s\n", mqtt_telemetry_topic);
+  } else {
+    Serial.printf("Telemetrie publiceren mislukt op %s\n", mqtt_telemetry_topic);
+  }
 }
 
 
@@ -1072,8 +1084,9 @@ void loop() {
       cellularTimeSyncStarted = true;
       Serial.println("Tijd synchroniseren via 4G voor MQTT-TLS");
     }
-    updateModemTelemetry();
   }
+
+  updateModemTelemetry();
 
   // Zonder betrouwbare 4G + MQTT terugvallen op ALL SEQUENCE.
   checkConnectionFallback();

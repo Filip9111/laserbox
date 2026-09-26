@@ -3,16 +3,16 @@
 #include <WebServer.h>
 
 #ifndef MODEM_RX_PIN
-#define MODEM_RX_PIN 17
+#define MODEM_RX_PIN 16
 #endif
 #ifndef MODEM_TX_PIN
-#define MODEM_TX_PIN 16
+#define MODEM_TX_PIN 17
 #endif
 #ifndef MODEM_BAUD
 #define MODEM_BAUD 115200
 #endif
 
-// The modem's RX is wired to ESP32 GPIO16 (ESP32 TX); modem TX to GPIO17 (ESP32 RX).
+// The modem's RX is wired to ESP32 GPIO17 (ESP32 TX); modem TX to GPIO16 (ESP32 RX).
 // Join grounds.
 HardwareSerial modem(2);
 WebServer server(80);

@@ -2,7 +2,7 @@ const MQTT_HOST = "wss://97a1520a4bff46d79cbb84c9d0e5468c.s1.eu.hivemq.cloud:888
 const MQTT_USER = "Lasertester";
 const MQTT_PASS = "Swat@laser1!";
 
-const BOX_COUNT = 3;
+const BOX_COUNT = 4;
 
 const BROWSER_CLIENT_ID =
     "LaserboxWeb-" + Math.random().toString(16).slice(2, 10);
@@ -14,7 +14,8 @@ for (let box = 1; box <= BOX_COUNT; box++) {
     boxState[box] = {
         status: "Wachten op status...",
         activeSequence: null,
-        lasers: Array(8).fill(false)
+        lasers: Array(8).fill(false),
+        telemetry: null
     };
 }
 
@@ -22,6 +23,13 @@ const connectionEl = document.getElementById("connection");
 const statusEl = document.getElementById("status");
 const selectedBoxTitleEl = document.getElementById("selectedBoxTitle");
 const logEl = document.getElementById("log");
+const modemSignalEl = document.getElementById("modemSignal");
+const signalBarEl = document.getElementById("signalBar");
+const signalMeterEl = signalBarEl.parentElement;
+const signalPercentEl = document.getElementById("signalPercent");
+const modemLocationEl = document.getElementById("modemLocation");
+const modemMapEl = document.getElementById("modemMap");
+const modemUpdatedEl = document.getElementById("modemUpdated");
 
 const sequenceButtons = {
     ALL: document.getElementById("btnAll"),
@@ -41,6 +49,10 @@ function statusTopic(box) {
     return `${baseTopic(box)}/status`;
 }
 
+function telemetryTopic(box) {
+    return `${baseTopic(box)}/telemetry`;
+}
+
 function log(message) {
     const time = new Date().toLocaleTimeString();
     logEl.value += `[${time}] ${message}\n`;
@@ -50,6 +62,35 @@ function log(message) {
 function setConnected(connected) {
     connectionEl.textContent = connected ? "● ONLINE" : "● OFFLINE";
     connectionEl.className = connected ? "online" : "offline";
+}
+
+function renderTelemetry(telemetry) {
+    const signal = telemetry.signalDbm === null ? NaN : Number(telemetry.signalDbm);
+    const csq = telemetry.rssi === null ? NaN : Number(telemetry.rssi);
+    const lat = telemetry.lat === null ? NaN : Number(telemetry.lat);
+    const lon = telemetry.lon === null ? NaN : Number(telemetry.lon);
+
+    const hasSignal = Number.isFinite(csq) && csq >= 0 && csq <= 31;
+    const signalPercent = hasSignal ? Math.round((csq / 31) * 100) : 0;
+    signalBarEl.style.width = `${signalPercent}%`;
+    signalMeterEl.setAttribute("aria-valuenow", String(signalPercent));
+    signalPercentEl.textContent = hasSignal
+        ? `Ontvangst: ${signalPercent}%`
+        : "Ontvangst: geen meting";
+    modemSignalEl.textContent = Number.isFinite(signal)
+        ? `Signaalwaarde: ${signal} dBm${hasSignal ? ` (CSQ ${csq}/31)` : ""}`
+        : "Signaalwaarde: geen meting";
+
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        modemLocationEl.textContent = `Locatie: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+        modemMapEl.href = `https://maps.google.com/?q=${lat},${lon}`;
+        modemMapEl.hidden = false;
+    } else {
+        modemLocationEl.textContent = "Locatie: nog geen GPS-fix";
+        modemMapEl.hidden = true;
+    }
+
+    modemUpdatedEl.textContent = `Laatste update: ${new Date().toLocaleTimeString()}`;
 }
 
 function clearSequenceHighlights() {
@@ -69,6 +110,18 @@ function renderSelectedBox() {
         `Laserbox ${String(selectedBox).padStart(2, "0")}`;
 
     statusEl.textContent = state.status;
+
+    if (state.telemetry) {
+        renderTelemetry(state.telemetry);
+    } else {
+        signalBarEl.style.width = "0%";
+        signalMeterEl.setAttribute("aria-valuenow", "0");
+        signalPercentEl.textContent = "Ontvangst: wachten op update...";
+        modemSignalEl.textContent = "Signaalwaarde: wachten op update...";
+        modemLocationEl.textContent = "Locatie: wachten op GPS-fix...";
+        modemMapEl.hidden = true;
+        modemUpdatedEl.textContent = "Laatste update: nog geen update ontvangen";
+    }
 
     for (let box = 1; box <= BOX_COUNT; box++) {
         document
@@ -123,6 +176,15 @@ client.on("connect", () => {
                 log(`Geabonneerd op ${topic}`);
             }
         });
+
+        const telemetry = telemetryTopic(box);
+        client.subscribe(telemetry, { qos: 1 }, (error) => {
+            if (error) {
+                log(`Abonneerfout ${telemetry}: ${error.message}`);
+            } else {
+                log(`Geabonneerd op ${telemetry}`);
+            }
+        });
     }
 });
 
@@ -146,8 +208,25 @@ client.on("error", (error) => {
 client.on("message", (topic, payload) => {
     const message = payload.toString().trim();
 
+    const telemetryMatch = topic.match(
+        /^filip\/laserbox(0[1-4])\/telemetry$/
+    );
+
+    if (telemetryMatch) {
+        const box = Number(telemetryMatch[1]);
+        try {
+            const telemetry = JSON.parse(message);
+            boxState[box].telemetry = telemetry;
+            if (box === selectedBox) renderTelemetry(telemetry);
+        } catch (error) {
+            log(`Ongeldige modemupdate op ${topic}`);
+        }
+        log(`${topic} bijgewerkt`);
+        return;
+    }
+
     const match = topic.match(
-        /^filip\/laserbox(0[1-3])\/status$/
+        /^filip\/laserbox(0[1-4])\/status$/
     );
 
     log(`${topic} → ${message}`);

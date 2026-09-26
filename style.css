@@ -34,6 +34,38 @@ h2{
     text-align:center;
 }
 
+.signal-meter{
+    margin-bottom:16px;
+}
+
+.signal-meter-track{
+    height:22px;
+    overflow:hidden;
+    border-radius:11px;
+    background:#454545;
+}
+
+.signal-meter-fill{
+    width:0%;
+    height:100%;
+    border-radius:inherit;
+    background:linear-gradient(90deg,#ff4040 0%,#ffc247 55%,#00d66b 100%);
+    transition:width .4s ease;
+}
+
+.signal-percent,
+#modemSignal{
+    margin-top:7px;
+    text-align:center;
+}
+
+.muted{
+    margin-top:7px;
+    color:#aaa;
+    font-size:13px;
+    text-align:center;
+}
+
 #connection{
     text-align:center;
     font-size:22px;

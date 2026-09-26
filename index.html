@@ -9,8 +9,8 @@
 
     <style>
         .box-selector {
-            display: none;
-            grid-template-columns: repeat(3, 1fr);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
             gap: 10px;
             margin-top: 15px;
         }
@@ -56,7 +56,7 @@
 
         @media (max-width: 600px) {
             .box-selector {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
             }
         }
     </style>
@@ -76,12 +76,28 @@
             <button id="box1" class="box-button box-active" type="button">Laserbox 1</button>
             <button id="box2" class="box-button" type="button">Laserbox 2</button>
             <button id="box3" class="box-button" type="button">Laserbox 3</button>
+            <button id="box4" class="box-button" type="button">Laserbox 4</button>
         </div>
     </div>
 
     <div class="card">
         <h2 id="selectedBoxTitle">Laserbox 01</h2>
         <div id="status">Wachten op verbinding...</div>
+    </div>
+
+    <div class="card">
+        <h2>4G-modem en locatie</h2>
+        <div class="signal-meter">
+            <div class="signal-meter-track" role="progressbar" aria-label="4G-ontvangst" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div id="signalBar" class="signal-meter-fill"></div>
+            </div>
+            <div id="signalPercent" class="signal-percent">Ontvangst: wachten op update...</div>
+            <div id="modemSignal">Signaalwaarde: wachten op update...</div>
+            <div class="muted">Percentage is een indicatieve schaal op basis van CSQ (0–31).</div>
+        </div>
+        <div id="modemLocation">Locatie: wachten op GPS-fix...</div>
+        <a id="modemMap" href="#" target="_blank" rel="noopener" hidden>Toon locatie op kaart</a>
+        <div id="modemUpdated" class="muted">Laatste update: nog geen update ontvangen</div>
     </div>
 
     <div class="card">

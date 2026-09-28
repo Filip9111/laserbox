@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Laserbox bediening</title>
 
-    <link rel="stylesheet" href="style.css?v=20260928-6">
+    <link rel="stylesheet" href="style.css?v=20260928-7">
 
     <style>
         .unknown { color: #aaa; }
@@ -49,6 +49,9 @@
         <h2 id="selectedBoxTitle">Laserbox 01</h2>
         <div id="status">Wachten op verbinding...</div>
         <div id="connection" class="unknown" role="status" aria-live="polite">Boxstatus: ONBEKEND</div>
+        <button id="btnMqttLogin" class="secondary mqtt-login-button" type="button">
+            HiveMQ-login instellen
+        </button>
     </div>
     <div class="card">
         <h2>4G-modem en locatie</h2>
@@ -130,6 +133,6 @@
     </form>
 </dialog>
 
-<script src="app.js?v=20260928-18"></script>
+<script src="app.js?v=20260928-19"></script>
 </body>
 </html>

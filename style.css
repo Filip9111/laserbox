@@ -103,6 +103,18 @@ h2{
     margin-bottom:15px;
 }
 
+.mqtt-login-button{
+    display:block;
+    width:min(100%, 300px);
+    height:44px;
+    margin:0 auto;
+    font-size:15px;
+}
+
+.mqtt-login-button[hidden]{
+    display:none;
+}
+
 .online{
     color:#00ff55;
 }

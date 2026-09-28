@@ -37,6 +37,7 @@ const modemMapEl = document.getElementById("modemMap");
 const mqttLoginDialog = document.getElementById("mqttLoginDialog");
 const mqttLoginForm = document.getElementById("mqttLoginForm");
 const cancelMqttLoginButton = document.getElementById("cancelMqttLogin");
+const openMqttLoginButton = document.getElementById("btnMqttLogin");
 const mqttUsernameEl = document.getElementById("mqttUsername");
 const mqttPasswordEl = document.getElementById("mqttPassword");
 const rememberMqttLoginEl = document.getElementById("rememberMqttLogin");
@@ -293,6 +294,7 @@ function renderBoxAvailability() {
     controlButtons.forEach((button) => {
         button.disabled = !controlsEnabled;
     });
+    openMqttLoginButton.hidden = controlsAuthorized;
 
     renderSignal(boxState[selectedBox].telemetry);
 
@@ -525,6 +527,7 @@ function connectToBroker(credentials = null, rememberCredentials = false) {
 
         setConnected(true);
         controlsAuthorized = Boolean(credentials);
+        openMqttLoginButton.hidden = controlsAuthorized;
         if (controlsAuthorized) {
             const wasRemembered = rememberCredentials
                 ? rememberMqttLogin(credentials)
@@ -565,6 +568,31 @@ function connectToBroker(credentials = null, rememberCredentials = false) {
 
     connection.on("error", (error) => {
         if (client !== connection) return;
+        const errorMessage = String(error.message || error).toLowerCase();
+        const authenticationRejected =
+            errorMessage.includes("not authorized") ||
+            errorMessage.includes("bad username") ||
+            errorMessage.includes("bad credentials") ||
+            errorMessage.includes("unauthorized");
+
+        if (authenticationRejected) {
+            controlsAuthorized = false;
+            if (credentials && credentials.username) {
+                mqttUsernameEl.value = credentials.username;
+            }
+            mqttPasswordEl.value = "";
+            mqttLoginMessageEl.textContent = credentials
+                ? "HiveMQ heeft deze login geweigerd. Vul de actuele login voor deze browser in."
+                : "HiveMQ vraagt om een login. Vul de gebruikersnaam en het wachtwoord in.";
+            if (!mqttLoginDialog.open) mqttLoginDialog.showModal();
+
+            client = null;
+            setConnected(false);
+            connection.end(true);
+            log(`MQTT-aanmelding geweigerd: ${error.message}`);
+            return;
+        }
+
         if (credentials && !controlsAuthorized) {
             mqttLoginMessageEl.textContent = "Aanmelden mislukt. Controleer de login.";
         }
@@ -576,8 +604,10 @@ function connectToBroker(credentials = null, rememberCredentials = false) {
 
 function openMqttLogin() {
     mqttLoginMessageEl.textContent = "Voer de MQTT-login in om de lasers te bedienen.";
-    mqttLoginDialog.showModal();
+    if (!mqttLoginDialog.open) mqttLoginDialog.showModal();
 }
+
+openMqttLoginButton.addEventListener("click", openMqttLogin);
 
 mqttLoginForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -598,7 +628,12 @@ mqttLoginForm.addEventListener("submit", (event) => {
 cancelMqttLoginButton.addEventListener("click", () => {
     mqttLoginDialog.close();
     mqttPasswordEl.value = "";
-    if (!controlsAuthorized) connectToBroker();
+    if (!controlsAuthorized && client) {
+        const connection = client;
+        client = null;
+        connection.end(true);
+        setConnected(false);
+    }
 });
 
 setConnected(false);

@@ -1,112 +1,223 @@
 const MQTT_HOST = "wss://97a1520a4bff46d79cbb84c9d0e5468c.s1.eu.hivemq.cloud:8884/mqtt";
-const MQTT_USER = "Lasertester";
-const MQTT_PASS = "Swat@laser1!";
-
-const BOX_COUNT = 4;
 
 const BROWSER_CLIENT_ID =
-    "LaserboxWeb-" + Math.random().toString(16).slice(2, 10);
+    "LaserboxStatus-" + Math.random().toString(16).slice(2, 10);
 
 const requestedBox = new URLSearchParams(window.location.search).get("box");
-let selectedBox = /^[1-4]$/.test(requestedBox || "") ? Number(requestedBox) : 1;
-const boxState = {};
+const selectedBox = /^[1-4]$/.test(requestedBox || "")
+    ? Number(requestedBox)
+    : 1;
 
-for (let box = 1; box <= BOX_COUNT; box++) {
-    boxState[box] = {
-        status: "Wachten op status...",
-        activeSequence: null,
-        lasers: Array(8).fill(false),
-        telemetry: null,
-        availability: null
-    };
-}
+const boxState = {
+    status: "Wachten op status...",
+    telemetry: null,
+    availability: null
+};
 
-const connectionEl = document.getElementById("connection");
 const statusEl = document.getElementById("status");
+const connectionEl = document.getElementById("connection");
 const selectedBoxTitleEl = document.getElementById("selectedBoxTitle");
-const logEl = document.getElementById("log");
 const modemSignalEl = document.getElementById("modemSignal");
 const signalBarEl = document.getElementById("signalBar");
 const signalMeterEl = signalBarEl.parentElement;
 const signalPercentEl = document.getElementById("signalPercent");
 const modemLocationEl = document.getElementById("modemLocation");
+const modemLocationUpdatedEl = document.getElementById("modemLocationUpdated");
+const gpsReceptionEl = document.getElementById("gpsReception");
+const gpsAccuracyEl = document.getElementById("gpsAccuracy");
 const modemMapEl = document.getElementById("modemMap");
 const modemUpdatedEl = document.getElementById("modemUpdated");
+let activeAddressKey = null;
+let addressRequestId = 0;
+let pendingAddressKey = null;
+let lastAddressRequestAt = 0;
+let lastAddressFailureKey = null;
+let lastAddressFailureAt = 0;
 
-const sequenceButtons = {
-    ALL: document.getElementById("btnAll"),
-    SEQ14: document.getElementById("btn14"),
-    SEQ58: document.getElementById("btn58")
-};
-
-function baseTopic(box) {
-    return `filip/laserbox${String(box).padStart(2, "0")}`;
+function baseTopic() {
+    return `filip/laserbox${String(selectedBox).padStart(2, "0")}`;
 }
 
-function commandTopic(box) {
-    return `${baseTopic(box)}/command`;
+function addressCacheKey(lat, lon) {
+    // Rond af om GPS-ruis te negeren; dit cachevak is ongeveer 100 meter.
+    return `${lat.toFixed(3)},${lon.toFixed(3)}`;
 }
 
-function statusTopic(box) {
-    return `${baseTopic(box)}/status`;
-}
-
-function telemetryTopic(box) {
-    return `${baseTopic(box)}/telemetry`;
-}
-
-function log(message) {
-    const time = new Date().toLocaleTimeString();
-    logEl.value += `[${time}] ${message}\n`;
-    logEl.scrollTop = logEl.scrollHeight;
-}
-
-function setConnected(connected) {
-    if (!connected) {
-        for (let box = 1; box <= BOX_COUNT; box++) {
-            boxState[box].availability = null;
+function readCachedAddress(key) {
+    try {
+        const cached = JSON.parse(localStorage.getItem(`laserbox-address-${key}`));
+        if (cached && Date.now() - cached.savedAt < 30 * 24 * 60 * 60 * 1000) {
+            return cached.address;
         }
+        localStorage.removeItem(`laserbox-address-${key}`);
+    } catch (error) {
+        // De pagina blijft werken wanneer lokale browseropslag niet beschikbaar is.
     }
-    renderBoxAvailability();
+    return null;
 }
 
-function setBoxAvailability(box, isOnline) {
-    boxState[box].availability = isOnline;
-    if (box === selectedBox) renderBoxAvailability();
+function cacheAddress(key, address) {
+    try {
+        localStorage.setItem(`laserbox-address-${key}`, JSON.stringify({
+            address,
+            savedAt: Date.now()
+        }));
+    } catch (error) {
+        // De pagina blijft werken wanneer lokale browseropslag niet beschikbaar is.
+    }
+}
+
+function formatAddress(result) {
+    const address = result.address || {};
+    const street = address.road
+        || address.pedestrian
+        || address.residential
+        || address.footway
+        || address.path
+        || "";
+    const streetLine = [street, address.house_number].filter(Boolean).join(" ");
+    const locality = address.city
+        || address.town
+        || address.village
+        || address.municipality
+        || address.hamlet
+        || "";
+    const localityLine = [address.postcode, locality].filter(Boolean).join(" ");
+
+    return [streetLine, localityLine].filter(Boolean).join(", ");
+}
+
+async function renderAddress(lat, lon, hasCurrentFix) {
+    const label = hasCurrentFix ? "Adres" : "Laatst bekende adres";
+    const key = addressCacheKey(lat, lon);
+    const cachedAddress = readCachedAddress(key);
+
+    if (cachedAddress) {
+        activeAddressKey = key;
+        addressRequestId++;
+        modemLocationEl.textContent = `${label}: ${cachedAddress}`;
+        return;
+    }
+
+    if (lastAddressFailureKey === key && Date.now() - lastAddressFailureAt < 5 * 60 * 1000) {
+        modemLocationEl.textContent = `${label}: adres tijdelijk niet beschikbaar`;
+        return;
+    }
+
+    if (activeAddressKey === key && pendingAddressKey === key) {
+        modemLocationEl.textContent = `${label}: adres wordt opgezocht...`;
+        return;
+    }
+
+    activeAddressKey = key;
+    const requestId = ++addressRequestId;
+    pendingAddressKey = key;
+
+    modemLocationEl.textContent = `${label}: adres wordt opgezocht...`;
+
+    const waitMs = Math.max(0, 1100 - (Date.now() - lastAddressRequestAt));
+    if (waitMs > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, waitMs));
+    }
+    if (requestId !== addressRequestId || key !== activeAddressKey) {
+        if (pendingAddressKey === key) pendingAddressKey = null;
+        return;
+    }
+
+    lastAddressRequestAt = Date.now();
+    const url = new URL("https://nominatim.openstreetmap.org/reverse");
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("addressdetails", "1");
+    url.searchParams.set("layer", "address");
+    url.searchParams.set("zoom", "18");
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lon));
+
+    try {
+        const response = await fetch(url, {
+            headers: { "Accept-Language": "nl-BE,nl;q=0.9,en;q=0.5" }
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const result = await response.json();
+        if (requestId !== addressRequestId || key !== activeAddressKey) return;
+        lastAddressFailureKey = null;
+
+        const formattedAddress = formatAddress(result);
+        if (!formattedAddress) {
+            cacheAddress(key, "Geen adres gevonden");
+            modemLocationEl.textContent = `${label}: geen adres gevonden`;
+            return;
+        }
+
+        cacheAddress(key, formattedAddress);
+        modemLocationEl.textContent = `${label}: ${formattedAddress}`;
+    } catch (error) {
+        if (requestId === addressRequestId && key === activeAddressKey) {
+            lastAddressFailureKey = key;
+            lastAddressFailureAt = Date.now();
+            modemLocationEl.textContent = `${label}: adres tijdelijk niet beschikbaar`;
+        }
+    } finally {
+        if (pendingAddressKey === key) pendingAddressKey = null;
+    }
 }
 
 function renderBoxAvailability() {
-    const isOnline = boxState[selectedBox].availability;
-    if (isOnline === null) {
+    if (boxState.availability === null) {
         connectionEl.textContent = "Boxstatus: ONBEKEND";
         connectionEl.className = "unknown";
-    } else {
-        connectionEl.textContent = `Boxstatus: ${isOnline ? "ONLINE" : "OFFLINE"}`;
-        connectionEl.className = isOnline ? "online" : "offline";
+        return;
     }
+
+    const isOnline = boxState.availability;
+    connectionEl.textContent = `Boxstatus: ${isOnline ? "ONLINE" : "OFFLINE"}`;
+    connectionEl.className = isOnline ? "online" : "offline";
 }
+
 function renderTelemetry(telemetry) {
-    const signal = telemetry.signalDbm === null ? NaN : Number(telemetry.signalDbm);
+    const signal = telemetry.signalDbm === null
+        ? NaN
+        : Number(telemetry.signalDbm);
     const csq = telemetry.rssi === null ? NaN : Number(telemetry.rssi);
     const lat = telemetry.lat === null ? NaN : Number(telemetry.lat);
     const lon = telemetry.lon === null ? NaN : Number(telemetry.lon);
+    const satellites = telemetry.gpsSatellites === null
+        ? NaN
+        : Number(telemetry.gpsSatellites);
+    const hdop = telemetry.gpsHdop === null ? NaN : Number(telemetry.gpsHdop);
+    const fixTimestamp = Number(telemetry.gpsFixTimestamp);
 
     const hasSignal = Number.isFinite(csq) && csq >= 0 && csq <= 31;
     const signalPercent = hasSignal ? Math.round((csq / 31) * 100) : 0;
     signalBarEl.style.width = `${signalPercent}%`;
     signalMeterEl.setAttribute("aria-valuenow", String(signalPercent));
     signalPercentEl.textContent = hasSignal
-        ? `Ontvangst: ${signalPercent}%`
-        : "Ontvangst: geen meting";
+        ? `4G-ontvangst: ${signalPercent}%`
+        : "4G-ontvangst: geen meting";
     modemSignalEl.textContent = Number.isFinite(signal)
-        ? `Signaalwaarde: ${signal} dBm${hasSignal ? ` (CSQ ${csq}/31)` : ""}`
-        : "Signaalwaarde: geen meting";
+        ? `4G-signaalwaarde: ${signal} dBm${hasSignal ? ` (CSQ ${csq}/31)` : ""}`
+        : "4G-signaalwaarde: geen meting";
+
+    gpsReceptionEl.textContent = Number.isFinite(satellites)
+        ? `GPS-ontvangst: ${satellites} bruikbare satellieten`
+        : "GPS-ontvangst: satellietgegevens nog niet beschikbaar";
+    gpsAccuracyEl.textContent = Number.isFinite(hdop)
+        ? `HDOP: ${hdop.toFixed(1)} (lager is nauwkeuriger)`
+        : "HDOP: nog niet beschikbaar";
 
     if (Number.isFinite(lat) && Number.isFinite(lon)) {
-        modemLocationEl.textContent = `Locatie: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+        const hasCurrentFix = telemetry.gpsStatus === "fix";
+        renderAddress(lat, lon, hasCurrentFix);
         modemMapEl.href = `https://maps.google.com/?q=${lat},${lon}`;
         modemMapEl.hidden = false;
+        modemLocationUpdatedEl.textContent = Number.isFinite(fixTimestamp) && fixTimestamp > 0
+            ? `Tijdstip laatste GPS-fix: ${new Date(fixTimestamp * 1000).toLocaleString("nl-BE")}`
+            : "Tijdstip van de laatste GPS-fix is niet beschikbaar";
     } else {
+        activeAddressKey = null;
+        addressRequestId++;
+        pendingAddressKey = null;
         const gpsMessages = {
             searching: "Locatie: GPS zoekt satellieten; zet de antenne buiten met vrij zicht op de hemel",
             command_failed: "Locatie: modem antwoordt niet op de GPS-statusaanvraag",
@@ -116,77 +227,45 @@ function renderTelemetry(telemetry) {
         };
         modemLocationEl.textContent = gpsMessages[telemetry.gpsStatus]
             || "Locatie: nog geen GPS-fix";
+        modemLocationUpdatedEl.textContent = "Laatste GPS-fix: nog geen bekende locatie";
         modemMapEl.hidden = true;
     }
 
     const timestamp = Number(telemetry.timestamp);
     modemUpdatedEl.textContent = Number.isFinite(timestamp) && timestamp > 0
-        ? `Laatste ontvangst: ${new Date(timestamp * 1000).toLocaleString("nl-BE")}`
-        : "Laatste ontvangst: datum/tijd ontbreekt in deze telemetrie";
+        ? `Laatste telemetrie: ${new Date(timestamp * 1000).toLocaleString("nl-BE")}`
+        : "Laatste telemetrie: datum/tijd ontbreekt";
 }
 
-function clearSequenceHighlights() {
-    Object.values(sequenceButtons).forEach((button) => {
-        button.classList.remove("sequence-active");
-    });
-}
-
-function resetLasers(box) {
-    boxState[box].lasers.fill(false);
-}
-
-function renderSelectedBox() {
-    const state = boxState[selectedBox];
-
+function render() {
     selectedBoxTitleEl.textContent =
         `Laserbox ${String(selectedBox).padStart(2, "0")}`;
-
-    statusEl.textContent = state.status;
-
-    if (state.telemetry) {
-        renderTelemetry(state.telemetry);
-    } else {
-        signalBarEl.style.width = "0%";
-        signalMeterEl.setAttribute("aria-valuenow", "0");
-        signalPercentEl.textContent = "Ontvangst: wachten op update...";
-        modemSignalEl.textContent = "Signaalwaarde: wachten op update...";
-        modemLocationEl.textContent = "Locatie: wachten op GPS-fix...";
-        modemMapEl.hidden = true;
-        modemUpdatedEl.textContent = "Laatste update: nog geen update ontvangen";
-    }
-
+    statusEl.textContent = boxState.status;
     renderBoxAvailability();
 
-    clearSequenceHighlights();
-
-    if (
-        state.activeSequence &&
-        sequenceButtons[state.activeSequence]
-    ) {
-        sequenceButtons[state.activeSequence]
-            .classList.add("sequence-active");
+    if (boxState.telemetry) {
+        renderTelemetry(boxState.telemetry);
+        return;
     }
 
-    for (let laser = 1; laser <= 8; laser++) {
-        document
-            .getElementById(`l${laser}`)
-            .classList.toggle(
-                "laser-on",
-                state.lasers[laser - 1]
-            );
-    }
+    signalBarEl.style.width = "0%";
+    signalMeterEl.setAttribute("aria-valuenow", "0");
+    signalPercentEl.textContent = "4G-ontvangst: wachten op update...";
+    modemSignalEl.textContent = "4G-signaalwaarde: wachten op update...";
+    gpsReceptionEl.textContent = "GPS-ontvangst: wachten op satellietgegevens...";
+    gpsAccuracyEl.textContent = "HDOP: wachten op satellietgegevens...";
+    modemLocationEl.textContent = "Adres: wachten op GPS-fix...";
+    modemLocationUpdatedEl.textContent = "Laatste GPS-fix: wachten op update...";
+    modemMapEl.hidden = true;
+    modemUpdatedEl.textContent = "Laatste telemetrie: nog geen update ontvangen";
 }
 
 const pageUrl = new URL(window.location.href);
 pageUrl.searchParams.set("box", String(selectedBox));
 window.history.replaceState(null, "", pageUrl);
-
-setConnected(false);
-log(`Verbinden met HiveMQ voor Laserbox ${selectedBox}...`);
+render();
 
 const client = mqtt.connect(MQTT_HOST, {
-    username: MQTT_USER,
-    password: MQTT_PASS,
     clientId: BROWSER_CLIENT_ID,
     reconnectPeriod: 3000,
     connectTimeout: 10000,
@@ -195,221 +274,42 @@ const client = mqtt.connect(MQTT_HOST, {
 });
 
 client.on("connect", () => {
-    setConnected(true);
-    log(`Verbonden met HiveMQ voor Laserbox ${selectedBox}`);
-
-    const base = baseTopic(selectedBox);
-    for (const topic of [`${base}/availability`, statusTopic(selectedBox), telemetryTopic(selectedBox)]) {
-        client.subscribe(topic, { qos: 1 }, (error) => {
-            if (error) log(`Abonneerfout ${topic}: ${error.message}`);
-            else log(`Geabonneerd op ${topic}`);
-        });
+    const base = baseTopic();
+    for (const topic of [`${base}/availability`, `${base}/status`, `${base}/telemetry`]) {
+        client.subscribe(topic, { qos: 1 });
     }
-});
-client.on("reconnect", () => {
-    log("Opnieuw verbinden met HiveMQ...");
 });
 
 client.on("close", () => {
-    setConnected(false);
-    log("MQTT-verbinding verbroken");
+    boxState.availability = null;
+    renderBoxAvailability();
 });
 
 client.on("offline", () => {
-    setConnected(false);
-});
-
-client.on("error", (error) => {
-    log(`MQTT-fout: ${error.message}`);
+    boxState.availability = null;
+    renderBoxAvailability();
 });
 
 client.on("message", (topic, payload) => {
     const message = payload.toString().trim();
+    const base = baseTopic();
 
-    const availabilityMatch = topic.match(
-        /^filip\/laserbox(0[1-4])\/availability$/
-    );
-    if (availabilityMatch) {
-        const box = Number(availabilityMatch[1]);
-        setBoxAvailability(box, message === "online");
-        log(`Laserbox ${box} ${message === "online" ? "online" : "offline"}`);
-        return;
-    }
-
-    const telemetryMatch = topic.match(
-        /^filip\/laserbox(0[1-4])\/telemetry$/
-    );
-
-    if (telemetryMatch) {
-        const box = Number(telemetryMatch[1]);
+    if (topic === `${base}/availability`) {
+        boxState.availability = message === "online";
+        renderBoxAvailability();
+    } else if (topic === `${base}/status`) {
+        boxState.status = message;
+        statusEl.textContent = message;
+    } else if (topic === `${base}/telemetry`) {
         try {
-            const telemetry = JSON.parse(message);
-            boxState[box].telemetry = telemetry;
-            if (box === selectedBox) renderTelemetry(telemetry);
+            boxState.telemetry = JSON.parse(message);
+            renderTelemetry(boxState.telemetry);
         } catch (error) {
-            log(`Ongeldige modemupdate op ${topic}`);
+            console.error("Ongeldige laserboxtelemetrie", error);
         }
-        log(`${topic} bijgewerkt`);
-        return;
     }
-
-    const match = topic.match(
-        /^filip\/laserbox(0[1-4])\/status$/
-    );
-
-    log(`${topic} → ${message}`);
-
-    if (!match) {
-        return;
-    }
-
-    const box = Number(match[1]);
-
-    handleStatusMessage(box, message);
 });
 
-function handleStatusMessage(box, message) {
-    const state = boxState[box];
-
-    state.status = message;
-
-    if (message === "ALL SEQUENCE") {
-        state.activeSequence = "ALL";
-        resetLasers(box);
-
-    } else if (message === "SEQUENCE LASER 1-4") {
-        state.activeSequence = "SEQ14";
-        resetLasers(box);
-
-    } else if (message === "SEQUENCE LASER 5-8") {
-        state.activeSequence = "SEQ58";
-        resetLasers(box);
-
-    } else if (message === "ALL LASERS ON") {
-        state.activeSequence = null;
-        state.lasers.fill(true);
-
-    } else if (
-        message === "STOP" ||
-        message === "AUTO SHUTDOWN - 2 HOURS"
-    ) {
-        state.activeSequence = null;
-        resetLasers(box);
-
-    } else {
-        const laserMatch =
-            message.match(/^LASER ([1-8]) TOGGLE$/);
-
-        if (laserMatch) {
-            const laserIndex =
-                Number(laserMatch[1]) - 1;
-
-            state.lasers[laserIndex] =
-                !state.lasers[laserIndex];
-        }
-    }
-
-    if (box === selectedBox) {
-        renderSelectedBox();
-    }
-}
-
-function sendCommand(command) {
-    if (!client.connected) {
-        log("Niet verzonden: geen verbinding met HiveMQ");
-        return false;
-    }
-
-    const boxAtSendTime = selectedBox;
-    const topic = commandTopic(boxAtSendTime);
-
-    client.publish(
-        topic,
-        command,
-        {
-            qos: 1,
-            retain: false
-        },
-        (error) => {
-            if (error) {
-                log(`Publicatiefout: ${error.message}`);
-            } else {
-                log(
-                    `Laserbox ${boxAtSendTime} verzonden → ${command}`
-                );
-            }
-        }
-    );
-
-    return true;
-}
-
-function startSequence(command) {
-    if (!sendCommand(command)) {
-        return;
-    }
-
-    boxState[selectedBox].activeSequence = command;
-    resetLasers(selectedBox);
-
-    renderSelectedBox();
-}
-
-function stopBox() {
-    if (!sendCommand("STOP")) {
-        return;
-    }
-
-    // STOP knippert bewust nooit.
-    boxState[selectedBox].activeSequence = null;
-    boxState[selectedBox].status = "STOP";
-
-    resetLasers(selectedBox);
-    renderSelectedBox();
-}
-
-document
-    .getElementById("btnAll")
-    .addEventListener("click", () => {
-        startSequence("ALL");
-    });
-
-document
-    .getElementById("btnStop")
-    .addEventListener("click", stopBox);
-
-document
-    .getElementById("btnAllOn")
-    .addEventListener("click", () => {
-        if (!sendCommand("ALL_ON")) {
-            return;
-        }
-
-        const state = boxState[selectedBox];
-        state.activeSequence = null;
-        state.status = "ALL LASERS ON";
-        state.lasers.fill(true);
-        renderSelectedBox();
-    });
-
-document
-    .getElementById("btn14")
-    .addEventListener("click", () => {
-        startSequence("SEQ14");
-    });
-
-document
-    .getElementById("btn58")
-    .addEventListener("click", () => {
-        startSequence("SEQ58");
-    });
-
-for (let laser = 1; laser <= 8; laser++) {
-    document
-        .getElementById(`l${laser}`)
-        .addEventListener("click", () => {
-            sendCommand(`L${laser}`);
-        });
-}
-
-renderSelectedBox();
+client.on("error", (error) => {
+    console.error("MQTT-fout", error.message);
+});

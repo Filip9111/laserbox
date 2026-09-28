@@ -148,6 +148,29 @@ button.secondary{
     margin:12px 0 6px;
 }
 
+.login-dialog .remember-login{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    color:#ddd;
+    font-size:14px;
+}
+
+.login-dialog .remember-login input[type="checkbox"]{
+    flex:0 0 18px;
+    width:18px;
+    height:18px;
+    margin:0;
+    accent-color:#8fd694;
+}
+
+.login-dialog .remember-login-note{
+    display:block;
+    margin-top:6px;
+    color:#aaa;
+    font-size:12px;
+}
+
 .login-dialog input{
     width:100%;
     height:44px;

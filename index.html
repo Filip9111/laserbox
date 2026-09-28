@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Laserbox bediening</title>
 
-    <link rel="stylesheet" href="style.css?v=20260928-2">
+    <link rel="stylesheet" href="style.css?v=20260928-3">
 
     <style>
         .unknown { color: #aaa; }
@@ -58,10 +58,14 @@
             </div>
             <div id="signalPercent" class="signal-percent">Ontvangst: wachten op update...</div>
             <div id="modemSignal">Signaalwaarde: wachten op update...</div>
+            <div id="gpsReception" class="muted">GPS-ontvangst: wachten op satellietgegevens...</div>
+            <div id="gpsAccuracy" class="muted">HDOP: wachten op satellietgegevens...</div>
         </div>
         <div id="modemLocation">Locatie: wachten op GPS-fix...</div>
-        <a id="modemMap" href="#" target="_blank" rel="noopener" hidden>Toon locatie op kaart</a>
+        <div id="modemLocationUpdated" class="muted">Laatste GPS-fix: wachten op update...</div>
+        <a id="modemMap" href="#" target="_blank" rel="noopener" hidden>Bekijk adres op kaart</a>
         <div id="modemUpdated" class="muted">Laatste update: nog geen update ontvangen</div>
+        <div class="muted">Adres opgezocht via GPS. &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-bijdragers</a></div>
     </div>
 
     <div class="card">
@@ -111,6 +115,11 @@
         <label for="mqttPassword">MQTT-wachtwoord</label>
         <input id="mqttPassword" name="password" type="password"
             autocomplete="current-password" required>
+        <label class="remember-login" for="rememberMqttLogin">
+            <input id="rememberMqttLogin" type="checkbox">
+            Onthoud mijn login op dit apparaat
+        </label>
+        <small class="remember-login-note">Je login blijft lokaal in deze browser bewaard. Gebruik dit alleen op je eigen apparaat.</small>
         <div id="mqttLoginMessage" class="login-message" aria-live="polite"></div>
         <div class="login-actions">
             <button id="cancelMqttLogin" class="secondary" type="button">
@@ -121,6 +130,6 @@
     </form>
 </dialog>
 
-<script src="app.js?v=20260928-11"></script>
+<script src="app.js?v=20260928-13"></script>
 </body>
 </html>

@@ -8,37 +8,7 @@
     <link rel="stylesheet" href="style.css">
 
     <style>
-        .box-selector {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .box-button {
-            height: 48px;
-            background: #555;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 2px;
-        }
-
-        .box-presence {
-            font-size: 10px;
-            line-height: 12px;
-        }
-
-        .unknown {
-            color: #bbb;
-        }
-
-        .box-button.box-active {
-            background: #1687ff;
-            color: white;
-            box-shadow: 0 0 14px rgba(22, 135, 255, 0.8);
-        }
+        .unknown { color: #aaa; }
 
         @keyframes blinkSequence {
             0%, 100% {
@@ -66,12 +36,6 @@
             margin-bottom: 15px;
             color: #7fc1ff;
         }
-
-        @media (max-width: 600px) {
-            .box-selector {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
     </style>
 
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -82,23 +46,10 @@
 
     <div class="card">
         <h1>Laserbox bediening</h1>
-
-        <div class="muted">Verbinding van deze webpagina met HiveMQ</div>
-        <div id="connection" class="offline">Dashboard ↔ HiveMQ: OFFLINE</div>
-
-        <div class="box-selector">
-            <button id="box1" class="box-button box-active" type="button">Laserbox 1<span id="boxPresence1" class="box-presence unknown">● ONBEKEND</span></button>
-            <button id="box2" class="box-button" type="button">Laserbox 2<span id="boxPresence2" class="box-presence unknown">● ONBEKEND</span></button>
-            <button id="box3" class="box-button" type="button">Laserbox 3<span id="boxPresence3" class="box-presence unknown">● ONBEKEND</span></button>
-            <button id="box4" class="box-button" type="button">Laserbox 4<span id="boxPresence4" class="box-presence unknown">● ONBEKEND</span></button>
-        </div>
-    </div>
-
-    <div class="card">
         <h2 id="selectedBoxTitle">Laserbox 01</h2>
         <div id="status">Wachten op verbinding...</div>
+        <div id="connection" class="unknown" role="status" aria-live="polite">Boxstatus: ONBEKEND</div>
     </div>
-
     <div class="card">
         <h2>4G-modem en locatie</h2>
         <div class="signal-meter">
@@ -147,7 +98,7 @@
 
 </div>
 
-<script src="app.js?v=20260928-2"></script>
+<script src="app.js?v=20260928-4"></script>
 </body>
 </html>
 

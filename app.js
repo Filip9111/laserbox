@@ -7,7 +7,8 @@ const BOX_COUNT = 4;
 const BROWSER_CLIENT_ID =
     "LaserboxWeb-" + Math.random().toString(16).slice(2, 10);
 
-let selectedBox = 1;
+const requestedBox = new URLSearchParams(window.location.search).get("box");
+let selectedBox = /^[1-4]$/.test(requestedBox || "") ? Number(requestedBox) : 1;
 const boxState = {};
 
 for (let box = 1; box <= BOX_COUNT; box++) {
@@ -61,30 +62,29 @@ function log(message) {
 }
 
 function setConnected(connected) {
-    connectionEl.textContent = connected ? "● ONLINE" : "● OFFLINE";
-    connectionEl.className = connected ? "online" : "offline";
     if (!connected) {
         for (let box = 1; box <= BOX_COUNT; box++) {
-            setBoxAvailability(box, null);
+            boxState[box].availability = null;
         }
     }
+    renderBoxAvailability();
 }
 
 function setBoxAvailability(box, isOnline) {
     boxState[box].availability = isOnline;
-    const indicator = document.getElementById(`boxPresence${box}`);
-    // A cached older index.html may not have the per-box indicator yet.
-    // Keep MQTT and command handling alive while that page cache expires.
-    if (!indicator) return;
-    if (isOnline === null) {
-        indicator.textContent = "● ONBEKEND";
-        indicator.className = "box-presence unknown";
-    } else {
-        indicator.textContent = isOnline ? "● ONLINE" : "● OFFLINE";
-        indicator.className = `box-presence ${isOnline ? "online" : "offline"}`;
-    }
+    if (box === selectedBox) renderBoxAvailability();
 }
 
+function renderBoxAvailability() {
+    const isOnline = boxState[selectedBox].availability;
+    if (isOnline === null) {
+        connectionEl.textContent = "Boxstatus: ONBEKEND";
+        connectionEl.className = "unknown";
+    } else {
+        connectionEl.textContent = `Boxstatus: ${isOnline ? "ONLINE" : "OFFLINE"}`;
+        connectionEl.className = isOnline ? "online" : "offline";
+    }
+}
 function renderTelemetry(telemetry) {
     const signal = telemetry.signalDbm === null ? NaN : Number(telemetry.signalDbm);
     const csq = telemetry.rssi === null ? NaN : Number(telemetry.rssi);
@@ -147,11 +147,7 @@ function renderSelectedBox() {
         modemUpdatedEl.textContent = "Laatste update: nog geen update ontvangen";
     }
 
-    for (let box = 1; box <= BOX_COUNT; box++) {
-        document
-            .getElementById(`box${box}`)
-            .classList.toggle("box-active", box === selectedBox);
-    }
+    renderBoxAvailability();
 
     clearSequenceHighlights();
 
@@ -173,8 +169,12 @@ function renderSelectedBox() {
     }
 }
 
+const pageUrl = new URL(window.location.href);
+pageUrl.searchParams.set("box", String(selectedBox));
+window.history.replaceState(null, "", pageUrl);
+
 setConnected(false);
-log("Verbinden met HiveMQ...");
+log(`Verbinden met HiveMQ voor Laserbox ${selectedBox}...`);
 
 const client = mqtt.connect(MQTT_HOST, {
     username: MQTT_USER,
@@ -188,39 +188,16 @@ const client = mqtt.connect(MQTT_HOST, {
 
 client.on("connect", () => {
     setConnected(true);
-    log("Verbonden met HiveMQ");
+    log(`Verbonden met HiveMQ voor Laserbox ${selectedBox}`);
 
-    for (let box = 1; box <= BOX_COUNT; box++) {
-        const availability = `${baseTopic(box)}/availability`;
-        client.subscribe(availability, { qos: 1 }, (error) => {
-            if (error) {
-                log(`Abonneerfout ${availability}: ${error.message}`);
-            } else {
-                log(`Geabonneerd op ${availability}`);
-            }
-        });
-
-        const topic = statusTopic(box);
-
+    const base = baseTopic(selectedBox);
+    for (const topic of [`${base}/availability`, statusTopic(selectedBox), telemetryTopic(selectedBox)]) {
         client.subscribe(topic, { qos: 1 }, (error) => {
-            if (error) {
-                log(`Abonneerfout ${topic}: ${error.message}`);
-            } else {
-                log(`Geabonneerd op ${topic}`);
-            }
-        });
-
-        const telemetry = telemetryTopic(box);
-        client.subscribe(telemetry, { qos: 1 }, (error) => {
-            if (error) {
-                log(`Abonneerfout ${telemetry}: ${error.message}`);
-            } else {
-                log(`Geabonneerd op ${telemetry}`);
-            }
+            if (error) log(`Abonneerfout ${topic}: ${error.message}`);
+            else log(`Geabonneerd op ${topic}`);
         });
     }
 });
-
 client.on("reconnect", () => {
     log("Opnieuw verbinden met HiveMQ...");
 });
@@ -377,17 +354,6 @@ function stopBox() {
 
     resetLasers(selectedBox);
     renderSelectedBox();
-}
-
-for (let box = 1; box <= BOX_COUNT; box++) {
-    document
-        .getElementById(`box${box}`)
-        .addEventListener("click", () => {
-            selectedBox = box;
-            renderSelectedBox();
-
-            log(`Laserbox ${box} geselecteerd`);
-        });
 }
 
 document

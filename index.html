@@ -3,32 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Publiek, alleen-lezen statusdashboard voor de vier laserboxen.">
-    <title>Laserbox status</title>
-    <link rel="stylesheet" href="/style.css">
+    <title>Laserbox bediening</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        .box-selector {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .box-button {
+            height: 48px;
+            background: #555;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 2px;
+        }
+
+        .box-presence {
+            font-size: 10px;
+            line-height: 12px;
+        }
+
+        .unknown {
+            color: #bbb;
+        }
+
+        .box-button.box-active {
+            background: #1687ff;
+            color: white;
+            box-shadow: 0 0 14px rgba(22, 135, 255, 0.8);
+        }
+
+        @keyframes blinkSequence {
+            0%, 100% {
+                background-color: #b00000;
+                color: white;
+                box-shadow: 0 0 7px rgba(255, 32, 32, 0.55);
+            }
+
+            50% {
+                background-color: #ff2020;
+                color: white;
+                box-shadow: 0 0 22px rgba(255, 32, 32, 1);
+            }
+        }
+
+        .sequence-active,
+        .laser-on {
+            animation: blinkSequence 0.7s infinite !important;
+            font-weight: bold;
+            color: white !important;
+        }
+
+        #selectedBoxTitle {
+            text-align: center;
+            margin-bottom: 15px;
+            color: #7fc1ff;
+        }
+
+        @media (max-width: 600px) {
+            .box-selector {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
+
 <body>
-<main class="container">
-    <section class="card">
-        <h1>Laserbox status</h1>
-        <label class="box-selector" for="boxSelect">
-            <span>Laserbox kiezen</span>
-            <select id="boxSelect">
-                <option value="1">Laserbox 1</option>
-                <option value="2">Laserbox 2</option>
-                <option value="3">Laserbox 3</option>
-                <option value="4">Laserbox 4</option>
-            </select>
-        </label>
-        <div id="connection" class="unknown" role="status" aria-live="polite">Boxstatus: ONBEKEND</div>
-    </section>
+<div class="container">
 
-    <section class="card">
+    <div class="card">
+        <h1>Laserbox bediening</h1>
+
+        <div class="muted">Verbinding van deze webpagina met HiveMQ</div>
+        <div id="connection" class="offline">Dashboard ↔ HiveMQ: OFFLINE</div>
+
+        <div class="box-selector">
+            <button id="box1" class="box-button box-active" type="button">Laserbox 1<span id="boxPresence1" class="box-presence unknown">● ONBEKEND</span></button>
+            <button id="box2" class="box-button" type="button">Laserbox 2<span id="boxPresence2" class="box-presence unknown">● ONBEKEND</span></button>
+            <button id="box3" class="box-button" type="button">Laserbox 3<span id="boxPresence3" class="box-presence unknown">● ONBEKEND</span></button>
+            <button id="box4" class="box-button" type="button">Laserbox 4<span id="boxPresence4" class="box-presence unknown">● ONBEKEND</span></button>
+        </div>
+    </div>
+
+    <div class="card">
         <h2 id="selectedBoxTitle">Laserbox 01</h2>
-        <div id="status">Wachten op status...</div>
-    </section>
+        <div id="status">Wachten op verbinding...</div>
+    </div>
 
-    <section class="card">
+    <div class="card">
         <h2>4G-modem en locatie</h2>
         <div class="signal-meter">
             <div class="signal-meter-track" role="progressbar" aria-label="4G-ontvangst" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -41,8 +112,43 @@
         <div id="modemLocation">Locatie: wachten op GPS-fix...</div>
         <a id="modemMap" href="#" target="_blank" rel="noopener" hidden>Toon locatie op kaart</a>
         <div id="modemUpdated" class="muted">Laatste update: nog geen update ontvangen</div>
-    </section>
-</main>
-<script src="/app.js"></script>
+    </div>
+
+    <div class="card">
+        <h2>Automatische sequenties</h2>
+
+        <div class="grid2">
+            <button id="btnAll" type="button">ALL SEQUENCE</button>
+            <button id="btnStop" class="red" type="button">STOP</button>
+            <button id="btn14" type="button">LASER 1-4</button>
+            <button id="btn58" type="button">LASER 5-8</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Handmatige bediening</h2>
+
+        <div class="laserGrid">
+            <button id="l1" type="button">Laser 1</button>
+            <button id="l2" type="button">Laser 2</button>
+            <button id="l3" type="button">Laser 3</button>
+            <button id="l4" type="button">Laser 4</button>
+            <button id="l5" type="button">Laser 5</button>
+            <button id="l6" type="button">Laser 6</button>
+            <button id="l7" type="button">Laser 7</button>
+            <button id="l8" type="button">Laser 8</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>MQTT Log</h2>
+        <textarea id="log" readonly></textarea>
+    </div>
+
+</div>
+
+<script src="app.js?v=20260928-2"></script>
 </body>
 </html>
+
+

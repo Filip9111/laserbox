@@ -3,42 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laserbox status</title>
+    <title>Laserbox bediening</title>
+
     <link rel="stylesheet" href="style.css">
+
+    <style>
+        .unknown { color: #aaa; }
+
+        @keyframes blinkSequence {
+            0%, 100% {
+                background-color: #b00000;
+                color: white;
+                box-shadow: 0 0 7px rgba(255, 32, 32, 0.55);
+            }
+
+            50% {
+                background-color: #ff2020;
+                color: white;
+                box-shadow: 0 0 22px rgba(255, 32, 32, 1);
+            }
+        }
+
+        .sequence-active,
+        .laser-on {
+            animation: blinkSequence 0.7s infinite !important;
+            font-weight: bold;
+            color: white !important;
+        }
+
+        #selectedBoxTitle {
+            text-align: center;
+            margin-bottom: 15px;
+            color: #7fc1ff;
+        }
+    </style>
+
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 
 <body>
-<main class="container">
-    <section class="card" aria-labelledby="pageTitle">
-        <h1 id="pageTitle">Laserbox status</h1>
-        <h2 id="selectedBoxTitle">Laserbox 01</h2>
-        <div id="status" aria-live="polite">Wachten op status...</div>
-        <div id="connection" class="unknown" role="status" aria-live="polite">
-            Boxstatus: ONBEKEND
-        </div>
-    </section>
+<div class="container">
 
-    <section class="card" aria-labelledby="modemTitle">
-        <h2 id="modemTitle">4G-modem en GPS</h2>
+    <div class="card">
+        <h1>Laserbox bediening</h1>
+        <h2 id="selectedBoxTitle">Laserbox 01</h2>
+        <div id="status">Wachten op verbinding...</div>
+        <div id="connection" class="unknown" role="status" aria-live="polite">Boxstatus: ONBEKEND</div>
+    </div>
+    <div class="card">
+        <h2>4G-modem en locatie</h2>
         <div class="signal-meter">
-            <div class="signal-meter-track" role="progressbar" aria-label="4G-ontvangst"
-                aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="signal-meter-track" role="progressbar" aria-label="4G-ontvangst" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                 <div id="signalBar" class="signal-meter-fill"></div>
             </div>
-            <div id="signalPercent" class="signal-percent">4G-ontvangst: wachten op update...</div>
-            <div id="modemSignal">4G-signaalwaarde: wachten op update...</div>
-            <div id="gpsReception" class="muted">GPS-ontvangst: wachten op satellietgegevens...</div>
-            <div id="gpsAccuracy" class="muted">HDOP: wachten op satellietgegevens...</div>
+            <div id="signalPercent" class="signal-percent">Ontvangst: wachten op update...</div>
+            <div id="modemSignal">Signaalwaarde: wachten op update...</div>
         </div>
-        <div id="modemLocation">Adres: wachten op GPS-fix...</div>
-        <div id="modemLocationUpdated" class="muted">Laatste GPS-fix: wachten op update...</div>
+        <div id="modemLocation">Locatie: wachten op GPS-fix...</div>
         <a id="modemMap" href="#" target="_blank" rel="noopener" hidden>Toon locatie op kaart</a>
-        <div id="modemUpdated" class="muted">Laatste telemetrie: nog geen update ontvangen</div>
-        <div class="muted">Adres wordt opgezocht via OpenStreetMap op basis van de GPS-locatie. © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-bijdragers</a></div>
-    </section>
-</main>
+        <div id="modemUpdated" class="muted">Laatste update: nog geen update ontvangen</div>
+    </div>
 
-<script src="app.js?v=20260928-10"></script>
+    <div class="card">
+        <h2>Automatische sequenties</h2>
+
+        <div class="grid2">
+            <button id="btnAll" type="button">ALL SEQUENCE</button>
+            <button id="btnStop" class="red" type="button">STOP</button>
+            <button id="btn14" type="button">LASER 1-4</button>
+            <button id="btn58" type="button">LASER 5-8</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Handmatige bediening</h2>
+
+        <button id="btnAllOn" type="button">ALLE LASERS AAN</button>
+
+        <div class="laserGrid">
+            <button id="l1" type="button">Laser 1</button>
+            <button id="l2" type="button">Laser 2</button>
+            <button id="l3" type="button">Laser 3</button>
+            <button id="l4" type="button">Laser 4</button>
+            <button id="l5" type="button">Laser 5</button>
+            <button id="l6" type="button">Laser 6</button>
+            <button id="l7" type="button">Laser 7</button>
+            <button id="l8" type="button">Laser 8</button>
+        </div>
+        <button id="lockControls" class="secondary" type="button" hidden>
+            Bediening vergrendelen
+        </button>
+    </div>
+
+    <div class="card">
+        <h2>MQTT Log</h2>
+        <textarea id="log" readonly></textarea>
+    </div>
+
+</div>
+
+<dialog id="mqttLoginDialog" class="login-dialog">
+    <form id="mqttLoginForm">
+        <h2>Bediening ontgrendelen</h2>
+        <label for="mqttUsername">MQTT-gebruikersnaam</label>
+        <input id="mqttUsername" name="username" type="text"
+            autocomplete="username" required>
+        <label for="mqttPassword">MQTT-wachtwoord</label>
+        <input id="mqttPassword" name="password" type="password"
+            autocomplete="current-password" required>
+        <div id="mqttLoginMessage" class="login-message" aria-live="polite"></div>
+        <div class="login-actions">
+            <button id="cancelMqttLogin" class="secondary" type="button">
+                Annuleren
+            </button>
+            <button type="submit">Verbinden</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="app.js?v=20260928-11"></script>
 </body>
 </html>

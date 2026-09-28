@@ -49,6 +49,14 @@ const sequenceButtons = {
     SEQ14: document.getElementById("btn14"),
     SEQ58: document.getElementById("btn58")
 };
+const controlButtons = [
+    ...Object.values(sequenceButtons),
+    document.getElementById("btnStop"),
+    document.getElementById("btnAllOn"),
+    ...Array.from({ length: 8 }, (_, index) =>
+        document.getElementById(`l${index + 1}`)
+    )
+];
 
 let activeAddressKey = null;
 let pendingAddressKey = null;
@@ -280,6 +288,12 @@ function setBoxAvailability(box, isOnline) {
 
 function renderBoxAvailability() {
     const isOnline = boxState[selectedBox].availability;
+    const controlsEnabled = isOnline === true;
+
+    controlButtons.forEach((button) => {
+        button.disabled = !controlsEnabled;
+    });
+
     if (isOnline === null) {
         connectionEl.textContent = "Boxstatus: ONBEKEND";
         connectionEl.className = "unknown";
@@ -639,6 +653,11 @@ function handleStatusMessage(box, message) {
 }
 
 function sendCommand(command) {
+    if (boxState[selectedBox].availability !== true) {
+        log(`Niet verzonden: Laserbox ${selectedBox} is offline of de status is onbekend`);
+        return false;
+    }
+
     if (!controlsAuthorized) {
         if (!mqttLoginDialog.open) openMqttLogin();
         return false;

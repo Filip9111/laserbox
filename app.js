@@ -294,6 +294,8 @@ function renderBoxAvailability() {
         button.disabled = !controlsEnabled;
     });
 
+    renderSignal(boxState[selectedBox].telemetry);
+
     if (isOnline === null) {
         connectionEl.textContent = "Boxstatus: ONBEKEND";
         connectionEl.className = "unknown";
@@ -326,15 +328,29 @@ function updateGpsLocationFreshness(fixTimestamp) {
     }
 }
 
-function renderTelemetry(telemetry) {
+function renderSignal(telemetry) {
+    const availability = boxState[selectedBox].availability;
+    signalBarEl.style.width = "0%";
+    signalMeterEl.setAttribute("aria-valuenow", "0");
+
+    if (availability !== true) {
+        const reason = availability === false ? "box offline" : "status onbekend";
+        signalPercentEl.textContent = `Ontvangst: geen actuele meting (${reason})`;
+        modemSignalEl.textContent = `Signaalwaarde: geen actuele meting (${reason})`;
+        return;
+    }
+
+    if (!telemetry) {
+        signalPercentEl.textContent = "Ontvangst: wachten op update...";
+        modemSignalEl.textContent = "Signaalwaarde: wachten op update...";
+        return;
+    }
+
     const signal = telemetry.signalDbm === null ? NaN : Number(telemetry.signalDbm);
     const csq = telemetry.rssi === null ? NaN : Number(telemetry.rssi);
-    const lat = telemetry.lat === null ? NaN : Number(telemetry.lat);
-    const lon = telemetry.lon === null ? NaN : Number(telemetry.lon);
-    const fixTimestamp = Number(telemetry.gpsFixTimestamp);
-
     const hasSignal = Number.isFinite(csq) && csq >= 0 && csq <= 31;
     const signalPercent = hasSignal ? Math.round((csq / 31) * 100) : 0;
+
     signalBarEl.style.width = `${signalPercent}%`;
     signalMeterEl.setAttribute("aria-valuenow", String(signalPercent));
     signalPercentEl.textContent = hasSignal
@@ -343,6 +359,14 @@ function renderTelemetry(telemetry) {
     modemSignalEl.textContent = Number.isFinite(signal)
         ? `Signaalwaarde: ${signal} dBm${hasSignal ? ` (CSQ ${csq}/31)` : ""}`
         : "Signaalwaarde: geen meting";
+}
+
+function renderTelemetry(telemetry) {
+    const lat = telemetry.lat === null ? NaN : Number(telemetry.lat);
+    const lon = telemetry.lon === null ? NaN : Number(telemetry.lon);
+    const fixTimestamp = Number(telemetry.gpsFixTimestamp);
+
+    renderSignal(telemetry);
 
     if (Number.isFinite(lat) && Number.isFinite(lon)) {
         const hasFixTime = Number.isFinite(fixTimestamp) && fixTimestamp > 0;

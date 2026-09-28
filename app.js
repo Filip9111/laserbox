@@ -73,6 +73,9 @@ function setConnected(connected) {
 function setBoxAvailability(box, isOnline) {
     boxState[box].availability = isOnline;
     const indicator = document.getElementById(`boxPresence${box}`);
+    // A cached older index.html may not have the per-box indicator yet.
+    // Keep MQTT and command handling alive while that page cache expires.
+    if (!indicator) return;
     if (isOnline === null) {
         indicator.textContent = "● ONBEKEND";
         indicator.className = "box-presence unknown";

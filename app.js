@@ -15,6 +15,7 @@ for (let box = 1; box <= BOX_COUNT; box++) {
         status: "Wachten op status...",
         activeSequence: null,
         allLasersBlinking: false,
+        allLasersOn: false,
         lasers: Array(8).fill(false),
         telemetry: null,
         availability: null
@@ -344,14 +345,15 @@ function resetLasers(box) {
 function renderSelectedBox() {
     const state = boxState[selectedBox];
     const allLasersButton = document.getElementById("btnAllOn");
+    const allLasersActive = state.allLasersBlinking || state.allLasersOn;
 
     selectedBoxTitleEl.textContent =
         `Laserbox ${String(selectedBox).padStart(2, "0")}`;
 
-    allLasersButton.textContent = state.allLasersBlinking
+    allLasersButton.textContent = allLasersActive
         ? "ALLE LASERS UIT"
         : "ALLE LASERS AAN";
-    allLasersButton.classList.toggle("laser-on", state.allLasersBlinking);
+    allLasersButton.classList.toggle("laser-on", allLasersActive);
 
     statusEl.textContent = state.status;
 
@@ -558,24 +560,31 @@ function handleStatusMessage(box, message) {
 
     if (message === "ALL SEQUENCE") {
         state.allLasersBlinking = false;
+        state.allLasersOn = false;
         state.activeSequence = "ALL";
         resetLasers(box);
 
     } else if (message === "SEQUENCE LASER 1-4") {
         state.allLasersBlinking = false;
+        state.allLasersOn = false;
         state.activeSequence = "SEQ14";
         resetLasers(box);
 
     } else if (message === "SEQUENCE LASER 5-8") {
         state.allLasersBlinking = false;
+        state.allLasersOn = false;
         state.activeSequence = "SEQ58";
         resetLasers(box);
 
-    } else if (
-        message === "ALL LASERS BLINKING" ||
-        message === "ALL LASERS ON"
-    ) {
+    } else if (message === "ALL LASERS BLINKING") {
         state.allLasersBlinking = true;
+        state.allLasersOn = false;
+        state.activeSequence = null;
+        state.lasers.fill(true);
+
+    } else if (message === "ALL LASERS ON") {
+        state.allLasersBlinking = false;
+        state.allLasersOn = true;
         state.activeSequence = null;
         state.lasers.fill(true);
 
@@ -584,6 +593,7 @@ function handleStatusMessage(box, message) {
         message === "AUTO SHUTDOWN - 2 HOURS"
     ) {
         state.allLasersBlinking = false;
+        state.allLasersOn = false;
         state.activeSequence = null;
         resetLasers(box);
 
@@ -594,6 +604,7 @@ function handleStatusMessage(box, message) {
         if (laserMatch) {
             if (state.allLasersBlinking) {
                 state.allLasersBlinking = false;
+                state.allLasersOn = false;
                 resetLasers(box);
             }
 
@@ -602,6 +613,7 @@ function handleStatusMessage(box, message) {
 
             state.lasers[laserIndex] =
                 !state.lasers[laserIndex];
+            state.allLasersOn = state.lasers.every(Boolean);
         }
     }
 
@@ -652,6 +664,7 @@ function startSequence(command) {
 
     boxState[selectedBox].activeSequence = command;
     boxState[selectedBox].allLasersBlinking = false;
+    boxState[selectedBox].allLasersOn = false;
     resetLasers(selectedBox);
 
     renderSelectedBox();
@@ -665,6 +678,7 @@ function stopBox() {
     // STOP knippert bewust nooit.
     boxState[selectedBox].activeSequence = null;
     boxState[selectedBox].allLasersBlinking = false;
+    boxState[selectedBox].allLasersOn = false;
     boxState[selectedBox].status = "STOP";
 
     resetLasers(selectedBox);
@@ -684,17 +698,29 @@ document
 document
     .getElementById("btnAllOn")
     .addEventListener("click", () => {
-        if (!sendCommand("ALL_BLINK")) {
-            return;
+        const state = boxState[selectedBox];
+        const allLasersActive = state.allLasersBlinking || state.allLasersOn;
+
+        if (allLasersActive) {
+            if (!sendCommand("STOP")) return;
+            state.allLasersBlinking = false;
+            state.allLasersOn = false;
+            state.activeSequence = null;
+            state.status = "STOP";
+            resetLasers(selectedBox);
+        } else {
+            if (!sendCommand("STOP")) return;
+            for (let laser = 1; laser <= 8; laser++) {
+                if (!sendCommand(`L${laser}`)) return;
+            }
+
+            state.allLasersBlinking = false;
+            state.allLasersOn = true;
+            state.activeSequence = null;
+            state.status = "ALL LASERS ON";
+            state.lasers.fill(true);
         }
 
-        const state = boxState[selectedBox];
-        state.allLasersBlinking = !state.allLasersBlinking;
-        state.activeSequence = null;
-        state.status = state.allLasersBlinking
-            ? "ALL LASERS BLINKING"
-            : "STOP";
-        state.lasers.fill(state.allLasersBlinking);
         renderSelectedBox();
     });
 

@@ -15,7 +15,8 @@ for (let box = 1; box <= BOX_COUNT; box++) {
         status: "Wachten op status...",
         activeSequence: null,
         lasers: Array(8).fill(false),
-        telemetry: null
+        telemetry: null,
+        availability: null
     };
 }
 
@@ -62,6 +63,23 @@ function log(message) {
 function setConnected(connected) {
     connectionEl.textContent = connected ? "● ONLINE" : "● OFFLINE";
     connectionEl.className = connected ? "online" : "offline";
+    if (!connected) {
+        for (let box = 1; box <= BOX_COUNT; box++) {
+            setBoxAvailability(box, null);
+        }
+    }
+}
+
+function setBoxAvailability(box, isOnline) {
+    boxState[box].availability = isOnline;
+    const indicator = document.getElementById(`boxPresence${box}`);
+    if (isOnline === null) {
+        indicator.textContent = "● ONBEKEND";
+        indicator.className = "box-presence unknown";
+    } else {
+        indicator.textContent = isOnline ? "● ONLINE" : "● OFFLINE";
+        indicator.className = `box-presence ${isOnline ? "online" : "offline"}`;
+    }
 }
 
 function renderTelemetry(telemetry) {
@@ -90,7 +108,10 @@ function renderTelemetry(telemetry) {
         modemMapEl.hidden = true;
     }
 
-    modemUpdatedEl.textContent = `Laatste update: ${new Date().toLocaleTimeString()}`;
+    const timestamp = Number(telemetry.timestamp);
+    modemUpdatedEl.textContent = Number.isFinite(timestamp) && timestamp > 0
+        ? `Laatste ontvangst: ${new Date(timestamp * 1000).toLocaleString("nl-BE")}`
+        : "Laatste ontvangst: datum/tijd ontbreekt in deze telemetrie";
 }
 
 function clearSequenceHighlights() {
@@ -167,6 +188,15 @@ client.on("connect", () => {
     log("Verbonden met HiveMQ");
 
     for (let box = 1; box <= BOX_COUNT; box++) {
+        const availability = `${baseTopic(box)}/availability`;
+        client.subscribe(availability, { qos: 1 }, (error) => {
+            if (error) {
+                log(`Abonneerfout ${availability}: ${error.message}`);
+            } else {
+                log(`Geabonneerd op ${availability}`);
+            }
+        });
+
         const topic = statusTopic(box);
 
         client.subscribe(topic, { qos: 1 }, (error) => {
@@ -207,6 +237,16 @@ client.on("error", (error) => {
 
 client.on("message", (topic, payload) => {
     const message = payload.toString().trim();
+
+    const availabilityMatch = topic.match(
+        /^filip\/laserbox(0[1-4])\/availability$/
+    );
+    if (availabilityMatch) {
+        const box = Number(availabilityMatch[1]);
+        setBoxAvailability(box, message === "online");
+        log(`Laserbox ${box} ${message === "online" ? "online" : "offline"}`);
+        return;
+    }
 
     const telemetryMatch = topic.match(
         /^filip\/laserbox(0[1-4])\/telemetry$/

@@ -19,6 +19,19 @@
             height: 48px;
             background: #555;
             color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 2px;
+        }
+
+        .box-presence {
+            font-size: 10px;
+            line-height: 12px;
+        }
+
+        .unknown {
+            color: #bbb;
         }
 
         .box-button.box-active {
@@ -70,13 +83,14 @@
     <div class="card">
         <h1>Laserbox bediening</h1>
 
-        <div id="connection" class="offline">● OFFLINE</div>
+        <div class="muted">Verbinding van deze webpagina met HiveMQ</div>
+        <div id="connection" class="offline">Dashboard ↔ HiveMQ: OFFLINE</div>
 
         <div class="box-selector">
-            <button id="box1" class="box-button box-active" type="button">Laserbox 1</button>
-            <button id="box2" class="box-button" type="button">Laserbox 2</button>
-            <button id="box3" class="box-button" type="button">Laserbox 3</button>
-            <button id="box4" class="box-button" type="button">Laserbox 4</button>
+            <button id="box1" class="box-button box-active" type="button">Laserbox 1<span id="boxPresence1" class="box-presence unknown">● ONBEKEND</span></button>
+            <button id="box2" class="box-button" type="button">Laserbox 2<span id="boxPresence2" class="box-presence unknown">● ONBEKEND</span></button>
+            <button id="box3" class="box-button" type="button">Laserbox 3<span id="boxPresence3" class="box-presence unknown">● ONBEKEND</span></button>
+            <button id="box4" class="box-button" type="button">Laserbox 4<span id="boxPresence4" class="box-presence unknown">● ONBEKEND</span></button>
         </div>
     </div>
 

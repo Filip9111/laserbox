@@ -42,7 +42,6 @@ const mqttUsernameEl = document.getElementById("mqttUsername");
 const mqttPasswordEl = document.getElementById("mqttPassword");
 const rememberMqttLoginEl = document.getElementById("rememberMqttLogin");
 const mqttLoginMessageEl = document.getElementById("mqttLoginMessage");
-const lockControlsButton = document.getElementById("lockControls");
 let client = null;
 let controlsAuthorized = false;
 
@@ -448,7 +447,6 @@ function connectToBroker(credentials = null, rememberCredentials = false) {
     if (previousClient) previousClient.end(true);
 
     controlsAuthorized = false;
-    lockControlsButton.hidden = true;
     setConnected(false);
 
     const options = {
@@ -471,7 +469,6 @@ function connectToBroker(credentials = null, rememberCredentials = false) {
 
         setConnected(true);
         controlsAuthorized = Boolean(credentials);
-        lockControlsButton.hidden = !controlsAuthorized;
         if (controlsAuthorized) {
             const wasRemembered = rememberCredentials
                 ? rememberMqttLogin(credentials)
@@ -546,16 +543,6 @@ cancelMqttLoginButton.addEventListener("click", () => {
     mqttLoginDialog.close();
     mqttPasswordEl.value = "";
     if (!controlsAuthorized) connectToBroker();
-});
-
-lockControlsButton.addEventListener("click", () => {
-    controlsAuthorized = false;
-    mqttUsernameEl.value = "";
-    mqttPasswordEl.value = "";
-    rememberMqttLoginEl.checked = false;
-    forgetMqttLogin();
-    connectToBroker();
-    mqttLoginMessageEl.textContent = "Bediening vergrendeld.";
 });
 
 setConnected(false);

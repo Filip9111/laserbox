@@ -16,6 +16,12 @@ body{
     padding:10px;
 }
 
+.page-footer{
+    max-width:700px;
+    margin:0 auto 24px;
+    padding:0 10px;
+}
+
 .card{
     background:#2a2a2a;
     border-radius:15px;

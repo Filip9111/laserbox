@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Laserbox bediening</title>
 
-    <link rel="stylesheet" href="style.css?v=20260928-4">
+    <link rel="stylesheet" href="style.css?v=20260928-5">
 
     <style>
         .unknown { color: #aaa; }
@@ -58,13 +58,13 @@
             </div>
             <div id="signalPercent" class="signal-percent">Ontvangst: wachten op update...</div>
             <div id="modemSignal">Signaalwaarde: wachten op update...</div>
-            <div id="gpsReception" class="muted">GPS-ontvangst: wachten op satellietgegevens...</div>
-            <div id="gpsAccuracy" class="muted">HDOP: wachten op satellietgegevens...</div>
         </div>
-        <div id="modemLocation">Locatie: wachten op GPS-fix...</div>
-        <div id="modemLocationUpdated" class="muted">Laatste GPS-fix: wachten op update...</div>
-        <a id="modemMap" href="#" target="_blank" rel="noopener" hidden>Bekijk adres op kaart</a>
-        <div id="modemUpdated" class="muted">Laatste update: nog geen update ontvangen</div>
+        <div id="modemLocation" class="gps-location gps-stale">
+            <span>Laatst gekend adres: </span>
+            <a id="modemMap" href="#" target="_blank" rel="noopener" hidden></a>
+            <span id="modemLocationMessage">wachten op GPS-fix...</span>
+            <span id="modemLocationUpdated" class="gps-fix-time"> — datum en tijd nog niet beschikbaar</span>
+        </div>
     </div>
 
     <div class="card">
@@ -130,6 +130,6 @@
     </form>
 </dialog>
 
-<script src="app.js?v=20260928-15"></script>
+<script src="app.js?v=20260928-16"></script>
 </body>
 </html>

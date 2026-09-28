@@ -65,6 +65,30 @@ h2{
     text-align:center;
 }
 
+.gps-location{
+    margin-top:14px;
+    text-align:center;
+    line-height:1.5;
+}
+
+.gps-location.gps-fresh,
+.gps-location.gps-fresh a{
+    color:#00ff55;
+}
+
+.gps-location.gps-stale,
+.gps-location.gps-stale a{
+    color:#ff4040;
+}
+
+.gps-location a{
+    text-decoration:underline;
+}
+
+.gps-fix-time{
+    font-size:13px;
+}
+
 .muted{
     margin-top:7px;
     color:#aaa;

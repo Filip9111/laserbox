@@ -31,11 +31,9 @@ const signalBarEl = document.getElementById("signalBar");
 const signalMeterEl = signalBarEl.parentElement;
 const signalPercentEl = document.getElementById("signalPercent");
 const modemLocationEl = document.getElementById("modemLocation");
+const modemLocationMessageEl = document.getElementById("modemLocationMessage");
 const modemLocationUpdatedEl = document.getElementById("modemLocationUpdated");
-const gpsReceptionEl = document.getElementById("gpsReception");
-const gpsAccuracyEl = document.getElementById("gpsAccuracy");
 const modemMapEl = document.getElementById("modemMap");
-const modemUpdatedEl = document.getElementById("modemUpdated");
 const mqttLoginDialog = document.getElementById("mqttLoginDialog");
 const mqttLoginForm = document.getElementById("mqttLoginForm");
 const cancelMqttLoginButton = document.getElementById("cancelMqttLogin");
@@ -58,6 +56,7 @@ let addressRequestId = 0;
 let lastAddressRequestAt = 0;
 let lastAddressFailureKey = null;
 let lastAddressFailureAt = 0;
+let gpsFreshnessTimeout = null;
 
 function baseTopic(box) {
     return `filip/laserbox${String(box).padStart(2, "0")}`;
@@ -145,8 +144,10 @@ function showAddressOnMap(address) {
 
     const mapUrl = new URL("https://maps.google.com/");
     mapUrl.searchParams.set("q", address);
+    modemMapEl.textContent = address;
     modemMapEl.href = mapUrl.toString();
     modemMapEl.hidden = false;
+    modemLocationMessageEl.hidden = true;
 }
 
 function formatAddress(result) {
@@ -168,35 +169,42 @@ function formatAddress(result) {
     return [streetLine, municipalityLine].filter(Boolean).join(", ");
 }
 
-async function renderAddress(lat, lon, currentFix) {
+async function renderAddress(lat, lon) {
     const key = addressCacheKey(lat, lon);
-    const label = currentFix ? "Adres" : "Laatst bekende adres";
     const cachedAddress = readCachedAddress(key);
 
     if (cachedAddress) {
         activeAddressKey = key;
         pendingAddressKey = null;
         addressRequestId++;
-        modemLocationEl.textContent = `${label}: ${cachedAddress}`;
-        showAddressOnMap(cachedAddress);
+        if (cachedAddress === "Geen adres gevonden") {
+            modemLocationMessageEl.textContent = cachedAddress;
+            modemLocationMessageEl.hidden = false;
+            modemMapEl.hidden = true;
+        } else {
+            showAddressOnMap(cachedAddress);
+        }
         return;
     }
 
     if (lastAddressFailureKey === key && Date.now() - lastAddressFailureAt < 5 * 60 * 1000) {
-        modemLocationEl.textContent = `${label}: adres tijdelijk niet beschikbaar`;
+        modemLocationMessageEl.textContent = "adres tijdelijk niet beschikbaar";
+        modemLocationMessageEl.hidden = false;
         modemMapEl.hidden = true;
         return;
     }
 
     if (activeAddressKey === key && pendingAddressKey === key) {
-        modemLocationEl.textContent = `${label}: adres wordt opgezocht...`;
+        modemLocationMessageEl.textContent = "adres wordt opgezocht...";
+        modemLocationMessageEl.hidden = false;
         return;
     }
 
     activeAddressKey = key;
     pendingAddressKey = key;
     const requestId = ++addressRequestId;
-    modemLocationEl.textContent = `${label}: adres wordt opgezocht...`;
+    modemLocationMessageEl.textContent = "adres wordt opgezocht...";
+    modemLocationMessageEl.hidden = false;
     modemMapEl.hidden = true;
 
     const waitMs = Math.max(0, 1100 - (Date.now() - lastAddressRequestAt));
@@ -230,13 +238,19 @@ async function renderAddress(lat, lon, currentFix) {
         const formattedAddress = formatAddress(result);
         const address = formattedAddress || "Geen adres gevonden";
         cacheAddress(key, address);
-        modemLocationEl.textContent = `${label}: ${address}`;
-        showAddressOnMap(address);
+        if (formattedAddress) {
+            showAddressOnMap(address);
+        } else {
+            modemLocationMessageEl.textContent = address;
+            modemLocationMessageEl.hidden = false;
+            modemMapEl.hidden = true;
+        }
     } catch (error) {
         if (requestId === addressRequestId && key === activeAddressKey) {
             lastAddressFailureKey = key;
             lastAddressFailureAt = Date.now();
-            modemLocationEl.textContent = `${label}: adres tijdelijk niet beschikbaar`;
+            modemLocationMessageEl.textContent = "adres tijdelijk niet beschikbaar";
+            modemLocationMessageEl.hidden = false;
             modemMapEl.hidden = true;
         }
     } finally {
@@ -274,15 +288,35 @@ function renderBoxAvailability() {
         connectionEl.className = isOnline ? "online" : "offline";
     }
 }
+
+function updateGpsLocationFreshness(fixTimestamp) {
+    if (gpsFreshnessTimeout !== null) {
+        window.clearTimeout(gpsFreshnessTimeout);
+        gpsFreshnessTimeout = null;
+    }
+
+    const timestamp = Number(fixTimestamp);
+    const hasFixTime = Number.isFinite(timestamp) && timestamp > 0;
+    const ageMs = Date.now() - timestamp * 1000;
+    const freshnessLimitMs = 30 * 60 * 1000;
+    const isFresh = hasFixTime && ageMs <= freshnessLimitMs && ageMs >= -5 * 60 * 1000;
+
+    modemLocationEl.classList.toggle("gps-fresh", isFresh);
+    modemLocationEl.classList.toggle("gps-stale", !isFresh);
+
+    if (isFresh) {
+        gpsFreshnessTimeout = window.setTimeout(
+            () => updateGpsLocationFreshness(timestamp),
+            Math.max(1, freshnessLimitMs - ageMs + 1)
+        );
+    }
+}
+
 function renderTelemetry(telemetry) {
     const signal = telemetry.signalDbm === null ? NaN : Number(telemetry.signalDbm);
     const csq = telemetry.rssi === null ? NaN : Number(telemetry.rssi);
     const lat = telemetry.lat === null ? NaN : Number(telemetry.lat);
     const lon = telemetry.lon === null ? NaN : Number(telemetry.lon);
-    const satellites = telemetry.gpsSatellites === null
-        ? NaN
-        : Number(telemetry.gpsSatellites);
-    const hdop = telemetry.gpsHdop === null ? NaN : Number(telemetry.gpsHdop);
     const fixTimestamp = Number(telemetry.gpsFixTimestamp);
 
     const hasSignal = Number.isFinite(csq) && csq >= 0 && csq <= 31;
@@ -296,40 +330,23 @@ function renderTelemetry(telemetry) {
         ? `Signaalwaarde: ${signal} dBm${hasSignal ? ` (CSQ ${csq}/31)` : ""}`
         : "Signaalwaarde: geen meting";
 
-    gpsReceptionEl.textContent = Number.isFinite(satellites)
-        ? `GPS-ontvangst: ${satellites} bruikbare satellieten`
-        : "GPS-ontvangst: satellietgegevens nog niet beschikbaar";
-    gpsAccuracyEl.textContent = Number.isFinite(hdop)
-        ? `HDOP: ${hdop.toFixed(1)} (lager is nauwkeuriger)`
-        : "HDOP: nog niet beschikbaar";
-
     if (Number.isFinite(lat) && Number.isFinite(lon)) {
-        renderAddress(lat, lon, telemetry.gpsStatus === "fix");
-
-        modemLocationUpdatedEl.textContent = Number.isFinite(fixTimestamp) && fixTimestamp > 0
-            ? `Tijdstip laatste GPS-fix: ${new Date(fixTimestamp * 1000).toLocaleString("nl-BE")}`
-            : "Tijdstip van de laatste GPS-fix is niet beschikbaar";
+        const hasFixTime = Number.isFinite(fixTimestamp) && fixTimestamp > 0;
+        updateGpsLocationFreshness(fixTimestamp);
+        modemLocationUpdatedEl.textContent = hasFixTime
+            ? ` — ${new Date(fixTimestamp * 1000).toLocaleString("nl-BE")}`
+            : " — datum en tijd onbekend";
+        renderAddress(lat, lon);
     } else {
         activeAddressKey = null;
         pendingAddressKey = null;
         addressRequestId++;
-        const gpsMessages = {
-            searching: "Locatie: GPS zoekt satellieten; zet de antenne buiten met vrij zicht op de hemel",
-            command_failed: "Locatie: modem antwoordt niet op de GPS-statusaanvraag",
-            start_failed: "Locatie: GPS kon niet worden gestart door de modem",
-            info_failed: "Locatie: modem antwoordt niet op de GPS-locatieaanvraag",
-            status_unknown: "Locatie: GPS-status van de modem is onbekend"
-        };
-        modemLocationEl.textContent = gpsMessages[telemetry.gpsStatus]
-            || "Locatie: nog geen GPS-fix";
-        modemLocationUpdatedEl.textContent = "Laatste GPS-fix: nog geen bekende locatie";
+        updateGpsLocationFreshness(null);
+        modemLocationMessageEl.textContent = "nog geen bekend adres";
+        modemLocationMessageEl.hidden = false;
+        modemLocationUpdatedEl.textContent = " — datum en tijd onbekend";
         modemMapEl.hidden = true;
     }
-
-    const timestamp = Number(telemetry.timestamp);
-    modemUpdatedEl.textContent = Number.isFinite(timestamp) && timestamp > 0
-        ? `Laatste ontvangst: ${new Date(timestamp * 1000).toLocaleString("nl-BE")}`
-        : "Laatste ontvangst: datum/tijd ontbreekt in deze telemetrie";
 }
 
 function clearSequenceHighlights() {
@@ -364,12 +381,11 @@ function renderSelectedBox() {
         signalMeterEl.setAttribute("aria-valuenow", "0");
         signalPercentEl.textContent = "Ontvangst: wachten op update...";
         modemSignalEl.textContent = "Signaalwaarde: wachten op update...";
-        gpsReceptionEl.textContent = "GPS-ontvangst: wachten op satellietgegevens...";
-        gpsAccuracyEl.textContent = "HDOP: wachten op satellietgegevens...";
-        modemLocationEl.textContent = "Locatie: wachten op GPS-fix...";
-        modemLocationUpdatedEl.textContent = "Laatste GPS-fix: wachten op update...";
+        updateGpsLocationFreshness(null);
+        modemLocationMessageEl.textContent = "wachten op GPS-fix...";
+        modemLocationMessageEl.hidden = false;
+        modemLocationUpdatedEl.textContent = " — datum en tijd nog niet beschikbaar";
         modemMapEl.hidden = true;
-        modemUpdatedEl.textContent = "Laatste update: nog geen update ontvangen";
     }
 
     renderBoxAvailability();

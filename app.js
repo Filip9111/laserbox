@@ -107,7 +107,15 @@ function renderTelemetry(telemetry) {
         modemMapEl.href = `https://maps.google.com/?q=${lat},${lon}`;
         modemMapEl.hidden = false;
     } else {
-        modemLocationEl.textContent = "Locatie: nog geen GPS-fix";
+        const gpsMessages = {
+            searching: "Locatie: GPS zoekt satellieten; zet de antenne buiten met vrij zicht op de hemel",
+            command_failed: "Locatie: modem antwoordt niet op de GPS-statusaanvraag",
+            start_failed: "Locatie: GPS kon niet worden gestart door de modem",
+            info_failed: "Locatie: modem antwoordt niet op de GPS-locatieaanvraag",
+            status_unknown: "Locatie: GPS-status van de modem is onbekend"
+        };
+        modemLocationEl.textContent = gpsMessages[telemetry.gpsStatus]
+            || "Locatie: nog geen GPS-fix";
         modemMapEl.hidden = true;
     }
 
@@ -277,6 +285,10 @@ function handleStatusMessage(box, message) {
         state.activeSequence = "SEQ58";
         resetLasers(box);
 
+    } else if (message === "ALL LASERS ON") {
+        state.activeSequence = null;
+        state.lasers.fill(true);
+
     } else if (
         message === "STOP" ||
         message === "AUTO SHUTDOWN - 2 HOURS"
@@ -365,6 +377,20 @@ document
 document
     .getElementById("btnStop")
     .addEventListener("click", stopBox);
+
+document
+    .getElementById("btnAllOn")
+    .addEventListener("click", () => {
+        if (!sendCommand("ALL_ON")) {
+            return;
+        }
+
+        const state = boxState[selectedBox];
+        state.activeSequence = null;
+        state.status = "ALL LASERS ON";
+        state.lasers.fill(true);
+        renderSelectedBox();
+    });
 
 document
     .getElementById("btn14")

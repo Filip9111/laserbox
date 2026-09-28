@@ -98,6 +98,11 @@ h2{
     gap:12px;
 }
 
+#btnAllOn{
+    width:100%;
+    margin-bottom:12px;
+}
+
 button{
     height:60px;
     border:none;
